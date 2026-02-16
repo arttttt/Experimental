@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Sidebar, { type ViewName } from './Sidebar';
+import { CandlestickChart } from '@/components/chart/CandlestickChart';
 
 const VIEW_TITLES: Record<ViewName, string> = {
   Chart: 'Chart View',
@@ -26,10 +27,16 @@ function App() {
           </header>
 
           <article className="mt-5 rounded-xl border border-slate-800 bg-slate-900/50 p-5 shadow-lg shadow-slate-950/30 md:mt-6 md:p-7">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Main content</p>
-            <div className="mt-4 rounded-lg border border-dashed border-slate-700/90 bg-slate-950/60 p-6 text-sm text-slate-300">
-              {activeView} screen placeholder. Integrate feature-specific modules in the next steps.
-            </div>
+            {activeView === 'Chart' ? (
+              <CandlestickChart />
+            ) : (
+              <>
+                <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Main content</p>
+                <div className="mt-4 rounded-lg border border-dashed border-slate-700/90 bg-slate-950/60 p-6 text-sm text-slate-300">
+                  {activeView} screen placeholder. Integrate feature-specific modules in the next steps.
+                </div>
+              </>
+            )}
           </article>
         </section>
       </div>
