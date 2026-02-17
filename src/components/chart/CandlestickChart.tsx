@@ -12,22 +12,36 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { BirdeyeMarketDataClient, type CandleTimeframe } from '@/features/market-data/BirdeyeMarketDataClient';
-import { ChartToolbar } from '@/components/chart/ChartToolbar';
+import { ChartToolbar, type ChartTokenOption } from '@/components/chart/ChartToolbar';
 
 interface CandlestickChartProps {
-  tokenMint?: string;
+  tokenMint: string;
+  selectedTokenSymbol: string;
+  availableTokens: readonly ChartTokenOption[];
+  onTokenChange: (symbol: string) => void;
 }
 
-const DEFAULT_TOKEN_MINT = 'So11111111111111111111111111111111111111112';
+const TIMEFRAME_SWITCH_DEBOUNCE_MS = 250;
 
 export function CandlestickChart(props: CandlestickChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const [timeframe, setTimeframe] = useState<CandleTimeframe>('15m');
+  const [selectedTimeframe, setSelectedTimeframe] = useState<CandleTimeframe>('15m');
+  const [timeframe, setTimeframe] = useState<CandleTimeframe>(selectedTimeframe);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setTimeframe(selectedTimeframe);
+    }, TIMEFRAME_SWITCH_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [selectedTimeframe]);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -121,7 +135,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
         setError(null);
 
         const candlePoints = await BirdeyeMarketDataClient.fetchCandles({
-          address: props.tokenMint ?? DEFAULT_TOKEN_MINT,
+          address: props.tokenMint,
           timeframe,
           signal: abortController.signal,
         });
@@ -172,9 +186,11 @@ export function CandlestickChart(props: CandlestickChartProps) {
       </div>
 
       <ChartToolbar
-        selectedTimeframe={timeframe}
-        onTimeframeChange={setTimeframe}
-        disabled={isLoading}
+        selectedTimeframe={selectedTimeframe}
+        onTimeframeChange={setSelectedTimeframe}
+        selectedTokenSymbol={props.selectedTokenSymbol}
+        tokenOptions={props.availableTokens}
+        onTokenChange={props.onTokenChange}
       />
 
       <div ref={containerRef} className="mt-3 h-[420px] w-full overflow-hidden rounded-lg border border-slate-800" />

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Sidebar, { type ViewName } from './Sidebar';
 import { CandlestickChart } from '@/components/chart/CandlestickChart';
+import { MarketTokenRegistry } from '@/domain/constants/MarketTokenRegistry';
 
 const VIEW_TITLES: Record<ViewName, string> = {
   Chart: 'Chart View',
@@ -10,6 +11,14 @@ const VIEW_TITLES: Record<ViewName, string> = {
 
 function App() {
   const [activeView, setActiveView] = useState<ViewName>('Chart');
+  const [selectedTokenSymbol, setSelectedTokenSymbol] = useState<string>(
+    MarketTokenRegistry.defaultToken().symbol,
+  );
+  const availableTokens = MarketTokenRegistry.all();
+  const selectedToken = useMemo(
+    () => MarketTokenRegistry.bySymbol(selectedTokenSymbol),
+    [selectedTokenSymbol],
+  );
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
@@ -28,7 +37,15 @@ function App() {
 
           <article className="mt-5 rounded-xl border border-slate-800 bg-slate-900/50 p-5 shadow-lg shadow-slate-950/30 md:mt-6 md:p-7">
             {activeView === 'Chart' ? (
-              <CandlestickChart />
+              <CandlestickChart
+                tokenMint={selectedToken.mint.value}
+                selectedTokenSymbol={selectedTokenSymbol}
+                availableTokens={availableTokens.map((token) => ({
+                  symbol: token.symbol,
+                  name: token.name,
+                }))}
+                onTokenChange={setSelectedTokenSymbol}
+              />
             ) : (
               <>
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Main content</p>
