@@ -5,12 +5,12 @@ import { CandleCache } from '@/data/sources/memory/CandleCache';
 
 export class OhlcvMarketDataService {
   private readonly primaryClient: OhlcvClient;
-  private readonly fallbackClient: OhlcvClient;
+  private readonly fallbackClient?: OhlcvClient;
   private readonly candleCache: CandleCache;
 
   public constructor(params: {
     primaryClient: OhlcvClient;
-    fallbackClient: OhlcvClient;
+    fallbackClient?: OhlcvClient;
     candleCache?: CandleCache;
   }) {
     this.primaryClient = params.primaryClient;
@@ -40,6 +40,14 @@ export class OhlcvMarketDataService {
     request: CandleRequest,
     primaryError: unknown,
   ): Promise<Candle[]> {
+    if (!this.fallbackClient) {
+      if (primaryError !== null) {
+        throw primaryError;
+      }
+
+      return [];
+    }
+
     try {
       const fallbackCandles = await this.fallbackClient.getCandles(request);
       if (fallbackCandles.length > 0) {

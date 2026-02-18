@@ -11,11 +11,14 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { DexScreenerClient } from '@/data/sources/api/DexScreenerClient';
+import { BirdeyeClient } from '@/data/sources/api/BirdeyeClient';
+import { GeckoTerminalClient } from '@/data/sources/api/GeckoTerminalClient';
 import type { CandleInterval } from '@/domain/models/market/Candle';
 import { ChartToolbar, type ChartTokenOption } from '@/components/chart/ChartToolbar';
+import { OhlcvMarketDataService } from '@/features/market-data/OhlcvMarketDataService';
 
 interface CandlestickChartProps {
+  poolAddress: string;
   tokenMint: string;
   selectedTokenSymbol: string;
   availableTokens: readonly ChartTokenOption[];
@@ -24,7 +27,17 @@ interface CandlestickChartProps {
 
 const TIMEFRAME_SWITCH_DEBOUNCE_MS = 250;
 const DEFAULT_CANDLE_LIMIT = 300;
-const dexScreenerClient = new DexScreenerClient();
+const geckoTerminalClient = new GeckoTerminalClient();
+const birdeyeApiKey =
+  typeof import.meta.env.VITE_BIRDEYE_API_KEY === 'string' &&
+  import.meta.env.VITE_BIRDEYE_API_KEY.trim().length > 0
+    ? import.meta.env.VITE_BIRDEYE_API_KEY.trim()
+    : undefined;
+const ohlcvMarketDataService = new OhlcvMarketDataService({
+  primaryClient: geckoTerminalClient,
+  fallbackClient: birdeyeApiKey ? new BirdeyeClient({ apiKey: birdeyeApiKey }) : undefined,
+});
+
 const timeframeToSeconds: Record<CandleInterval, number> = {
   '1m': 60,
   '5m': 300,
@@ -149,8 +162,9 @@ export function CandlestickChart(props: CandlestickChartProps) {
         const intervalSeconds = timeframeToSeconds[timeframe];
         const fromUnixSec = now - intervalSeconds * DEFAULT_CANDLE_LIMIT;
 
-        const candlePoints = await dexScreenerClient.getCandles({
-          address: props.tokenMint,
+        const candlePoints = await ohlcvMarketDataService.getCandles({
+          address: props.poolAddress,
+          fallbackAddress: props.tokenMint,
           interval: timeframe,
           fromUnixSec,
           toUnixSec: now,
@@ -196,7 +210,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
     return () => {
       isCancelled = true;
     };
-  }, [props.tokenMint, timeframe]);
+  }, [props.poolAddress, props.tokenMint, timeframe]);
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40">

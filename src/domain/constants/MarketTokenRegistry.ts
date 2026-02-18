@@ -4,6 +4,7 @@ export interface MarketTokenDefinition {
   symbol: string;
   name: string;
   mint: TokenMint;
+  poolAddress: string;
 }
 
 export class MarketTokenRegistry {
@@ -12,11 +13,13 @@ export class MarketTokenRegistry {
       symbol: 'SOL',
       name: 'Wrapped SOL',
       mint: new TokenMint('So11111111111111111111111111111111111111112'),
+      poolAddress: 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE',
     },
     {
       symbol: 'USDC',
       name: 'USD Coin',
       mint: new TokenMint('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+      poolAddress: 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE',
     },
   ];
 

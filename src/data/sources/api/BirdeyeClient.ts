@@ -29,7 +29,7 @@ export class BirdeyeClient implements OhlcvClient {
 
     try {
       const query = new URLSearchParams({
-        address: request.address,
+        address: request.fallbackAddress ?? request.address,
         type: request.interval,
         time_from: String(request.fromUnixSec),
         time_to: String(request.toUnixSec),

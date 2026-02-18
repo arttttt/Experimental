@@ -82,4 +82,28 @@ describe('OhlcvMarketDataService', () => {
       'Primary source failed (primary); fallback failed (fallback)',
     );
   });
+
+  it('returns empty result when primary has no candles and fallback is disabled', async () => {
+    const primaryClient: OhlcvClient = {
+      getCandles: vi.fn().mockResolvedValue([]),
+    };
+
+    const service = new OhlcvMarketDataService({
+      primaryClient,
+    });
+
+    await expect(service.getCandles(REQUEST)).resolves.toEqual([]);
+  });
+
+  it('throws primary error when fallback is disabled', async () => {
+    const primaryClient: OhlcvClient = {
+      getCandles: vi.fn().mockRejectedValue(new MarketDataClientError('geckoterminal', 'primary failed')),
+    };
+
+    const service = new OhlcvMarketDataService({
+      primaryClient,
+    });
+
+    await expect(service.getCandles(REQUEST)).rejects.toThrow('primary failed');
+  });
 });

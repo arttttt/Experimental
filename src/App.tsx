@@ -38,6 +38,7 @@ function App() {
           <article className="mt-5 rounded-xl border border-slate-800 bg-slate-900/50 p-5 shadow-lg shadow-slate-950/30 md:mt-6 md:p-7">
             {activeView === 'Chart' ? (
               <CandlestickChart
+                poolAddress={selectedToken.poolAddress}
                 tokenMint={selectedToken.mint.value}
                 selectedTokenSymbol={selectedTokenSymbol}
                 availableTokens={availableTokens.map((token) => ({

@@ -4,6 +4,7 @@ export type CandleCurrency = 'usd' | 'token';
 
 export interface CandleRequest {
   address: string;
+  fallbackAddress?: string;
   interval: CandleInterval;
   fromUnixSec: number;
   toUnixSec: number;
