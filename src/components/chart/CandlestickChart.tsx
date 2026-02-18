@@ -11,7 +11,8 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { BirdeyeMarketDataClient, type CandleTimeframe } from '@/features/market-data/BirdeyeMarketDataClient';
+import { DexScreenerClient } from '@/data/sources/api/DexScreenerClient';
+import type { CandleInterval } from '@/domain/models/market/Candle';
 import { ChartToolbar, type ChartTokenOption } from '@/components/chart/ChartToolbar';
 
 interface CandlestickChartProps {
@@ -22,14 +23,24 @@ interface CandlestickChartProps {
 }
 
 const TIMEFRAME_SWITCH_DEBOUNCE_MS = 250;
+const DEFAULT_CANDLE_LIMIT = 300;
+const dexScreenerClient = new DexScreenerClient();
+const timeframeToSeconds: Record<CandleInterval, number> = {
+  '1m': 60,
+  '5m': 300,
+  '15m': 900,
+  '1h': 3600,
+  '4h': 14400,
+  '1d': 86400,
+};
 
 export function CandlestickChart(props: CandlestickChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<CandleTimeframe>('15m');
-  const [timeframe, setTimeframe] = useState<CandleTimeframe>(selectedTimeframe);
+  const [selectedTimeframe, setSelectedTimeframe] = useState<CandleInterval>('15m');
+  const [timeframe, setTimeframe] = useState<CandleInterval>(selectedTimeframe);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,21 +138,31 @@ export function CandlestickChart(props: CandlestickChartProps) {
       return;
     }
 
-    const abortController = new AbortController();
+    let isCancelled = false;
 
     const loadCandles = async () => {
       try {
         setIsLoading(true);
         setError(null);
 
-        const candlePoints = await BirdeyeMarketDataClient.fetchCandles({
+        const now = Math.floor(Date.now() / 1000);
+        const intervalSeconds = timeframeToSeconds[timeframe];
+        const fromUnixSec = now - intervalSeconds * DEFAULT_CANDLE_LIMIT;
+
+        const candlePoints = await dexScreenerClient.getCandles({
           address: props.tokenMint,
-          timeframe,
-          signal: abortController.signal,
+          interval: timeframe,
+          fromUnixSec,
+          toUnixSec: now,
+          limit: DEFAULT_CANDLE_LIMIT,
         });
 
+        if (isCancelled) {
+          return;
+        }
+
         const candles: CandlestickData[] = candlePoints.map((point) => ({
-          time: point.time as UTCTimestamp,
+          time: point.openTimeUnixSec as UTCTimestamp,
           open: point.open,
           high: point.high,
           low: point.low,
@@ -149,7 +170,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
         }));
 
         const volumes: HistogramData[] = candlePoints.map((point) => ({
-          time: point.time as UTCTimestamp,
+          time: point.openTimeUnixSec as UTCTimestamp,
           value: point.volume,
           color: point.close >= point.open ? 'rgba(34, 197, 94, 0.35)' : 'rgba(239, 68, 68, 0.35)',
         }));
@@ -158,20 +179,22 @@ export function CandlestickChart(props: CandlestickChartProps) {
         volumeRef.current?.setData(volumes);
         chartRef.current?.timeScale().fitContent();
       } catch (cause) {
-        if ((cause as DOMException).name === 'AbortError') {
+        if (isCancelled) {
           return;
         }
 
         setError(cause instanceof Error ? cause.message : 'Failed to load candle data.');
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
     void loadCandles();
 
     return () => {
-      abortController.abort();
+      isCancelled = true;
     };
   }, [props.tokenMint, timeframe]);
 

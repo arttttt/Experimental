@@ -1,4 +1,4 @@
-import type { CandleTimeframe } from '@/features/market-data/BirdeyeMarketDataClient';
+import type { CandleInterval } from '@/domain/models/market/Candle';
 
 export interface ChartTokenOption {
   symbol: string;
@@ -6,15 +6,15 @@ export interface ChartTokenOption {
 }
 
 interface ChartToolbarProps {
-  selectedTimeframe: CandleTimeframe;
-  onTimeframeChange: (timeframe: CandleTimeframe) => void;
+  selectedTimeframe: CandleInterval;
+  onTimeframeChange: (timeframe: CandleInterval) => void;
   selectedTokenSymbol: string;
   tokenOptions: readonly ChartTokenOption[];
   onTokenChange: (symbol: string) => void;
   disabled?: boolean;
 }
 
-const TIMEFRAMES: CandleTimeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+const TIMEFRAMES: CandleInterval[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
 export function ChartToolbar(props: ChartToolbarProps) {
   return (
