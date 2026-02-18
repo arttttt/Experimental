@@ -22,3 +22,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   // You can expose other APTs you need here.
   // ...
 })
+
+contextBridge.exposeInMainWorld('walletCrypto', {
+  encrypt: (plaintext: string, password: string) => {
+    return ipcRenderer.invoke('ipc:crypto:encrypt', plaintext, password)
+  },
+  decrypt: (encryptedBase64: string, password: string) => {
+    return ipcRenderer.invoke('ipc:crypto:decrypt', encryptedBase64, password)
+  },
+})

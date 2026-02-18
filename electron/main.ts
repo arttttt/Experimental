@@ -1,6 +1,7 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { KeyEncryptionService } from '../src/infrastructure/internal/crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -23,6 +24,7 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+const keyEncryptionService = new KeyEncryptionService()
 
 function createWindow() {
   win = new BrowserWindow({
@@ -63,4 +65,14 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  ipcMain.handle('ipc:crypto:encrypt', async (_event, plaintext: string, password: string) => {
+    return keyEncryptionService.encrypt(plaintext, password)
+  })
+
+  ipcMain.handle('ipc:crypto:decrypt', async (_event, encryptedBase64: string, password: string) => {
+    return keyEncryptionService.decrypt(encryptedBase64, password)
+  })
+
+  createWindow()
+})

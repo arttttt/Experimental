@@ -24,4 +24,8 @@ declare namespace NodeJS {
 // Used in Renderer process, expose in `preload.ts`
 interface Window {
   ipcRenderer: import('electron').IpcRenderer
+  walletCrypto: {
+    encrypt: (plaintext: string, password: string) => Promise<string>
+    decrypt: (encryptedBase64: string, password: string) => Promise<string>
+  }
 }
