@@ -24,6 +24,13 @@ interface JsonRpcErrorResponse {
 
 type JsonRpcResponse = JsonRpcSuccessResponse | JsonRpcErrorResponse;
 
+type JsonRpcPayloadRequest = Readonly<{
+  jsonrpc: '2.0';
+  id: JsonRpcId;
+  method: string;
+  params: unknown[];
+}>;
+
 export class BatchRpcClient {
   private readonly rpcUrl: string;
   private readonly timeoutMs: number;
@@ -51,7 +58,7 @@ export class BatchRpcClient {
         return results;
       }
 
-      const payload = Array.from(pending.values()).map((request) => ({
+      const payload: JsonRpcPayloadRequest[] = Array.from(pending.values()).map((request) => ({
         jsonrpc: '2.0',
         id: request.id,
         method: request.method,
@@ -117,12 +124,7 @@ export class BatchRpcClient {
   }
 
   private async postBatch(
-    payload: ReadonlyArray<{
-      jsonrpc: '2.0';
-      id: JsonRpcId;
-      method: string;
-      params: unknown[];
-    }>,
+    payload: ReadonlyArray<JsonRpcPayloadRequest>,
   ): Promise<JsonRpcResponse[]> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);

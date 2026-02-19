@@ -66,12 +66,12 @@ describe('JupiterTriggerClient', () => {
         maker: '7QfWf9R8UVh4iQfVq8M8L6X6KQ2DmbVnJx8aS3n8zXjW',
         order: '3g2jF8txqXPp6GUStwtXMrWydeYWxU4qoBA8UDLoTnK7',
       }),
-    ).rejects.toMatchObject<JupiterTriggerClientError>({
+    ).rejects.toMatchObject({
       message: 'Jupiter Trigger API HTTP 400',
       status: 400,
       code: 400,
       requestId: 'req-2',
-    });
+    } satisfies Partial<JupiterTriggerClientError>);
   });
 
   it('reads trigger orders from nested data payload', async () => {
