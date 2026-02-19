@@ -9,6 +9,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 );
 
-window.ipcRenderer.on('main-process-message', (_event, message) => {
-  console.log(message);
-});
+const ipcRenderer = window.ipcRenderer;
+
+if (typeof ipcRenderer?.on === 'function') {
+  ipcRenderer.on('main-process-message', (_event, message) => {
+    console.log(message);
+  });
+}
