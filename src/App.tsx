@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Sidebar, { type ViewName } from './Sidebar';
 import { CandlestickChart } from '@/components/chart/CandlestickChart';
+import { TokenBalancesPanel } from '@/components/portfolio/TokenBalancesPanel';
 import { MarketTokenRegistry } from '@/domain/constants/MarketTokenRegistry';
 
 const VIEW_TITLES: Record<ViewName, string> = {
@@ -8,6 +9,12 @@ const VIEW_TITLES: Record<ViewName, string> = {
   Portfolio: 'Portfolio Overview',
   Settings: 'Workspace Settings',
 };
+
+const DEMO_WALLET_ADDRESS =
+  typeof import.meta.env.VITE_DEMO_WALLET_ADDRESS === 'string' &&
+  import.meta.env.VITE_DEMO_WALLET_ADDRESS.trim().length > 0
+    ? import.meta.env.VITE_DEMO_WALLET_ADDRESS.trim()
+    : '6QWeT6FpJrm8AF1btu6WH2k2Xhq2jRPjZ8M2Wspxt3r9';
 
 function App() {
   const [activeView, setActiveView] = useState<ViewName>('Chart');
@@ -47,6 +54,8 @@ function App() {
                 }))}
                 onTokenChange={setSelectedTokenSymbol}
               />
+            ) : activeView === 'Portfolio' ? (
+              <TokenBalancesPanel walletAddress={DEMO_WALLET_ADDRESS} />
             ) : (
               <>
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Main content</p>
