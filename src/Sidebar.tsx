@@ -1,6 +1,6 @@
 import WalletConnectPanel from '@/components/wallet/WalletConnectPanel';
 
-const VIEWS = ['Chart', 'Portfolio', 'Settings'] as const;
+const VIEWS = ['Chart', 'Swap', 'Portfolio', 'Settings'] as const;
 
 export type ViewName = (typeof VIEWS)[number];
 
@@ -18,7 +18,7 @@ function Sidebar({ activeView, onSelectView }: SidebarProps) {
       </div>
 
       <nav className="px-3 pb-4 md:px-4 md:pb-6" aria-label="Primary">
-        <ul className="grid grid-cols-3 gap-2 md:grid-cols-1">
+        <ul className="grid grid-cols-2 gap-2 md:grid-cols-1">
           {VIEWS.map((view) => {
             const isActive = view === activeView;
 
