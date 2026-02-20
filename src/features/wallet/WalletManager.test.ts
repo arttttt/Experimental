@@ -1,10 +1,12 @@
 import {
   createKeyPairSignerFromPrivateKeyBytes,
 } from '@solana/kit';
+import { bytesToHex } from '@noble/hashes/utils';
 import bs58 from 'bs58';
 import * as bip39 from 'bip39';
-import { derivePath } from 'ed25519-hd-key';
 import { beforeAll, describe, expect, it } from 'vitest';
+
+import { derivePath } from './slip0010';
 
 import { KeyEncryptionService } from '@/infrastructure/internal/crypto';
 
@@ -115,7 +117,7 @@ describe('WalletManager', () => {
 
 async function derivePrivateKey(mnemonic: string): Promise<Uint8Array> {
   const seed = await bip39.mnemonicToSeed(mnemonic);
-  const derived = derivePath(DERIVATION_PATH, Buffer.from(seed).toString('hex'));
+  const derived = derivePath(DERIVATION_PATH, bytesToHex(new Uint8Array(seed)));
   return Uint8Array.from(derived.key);
 }
 
