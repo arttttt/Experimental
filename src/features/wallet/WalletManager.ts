@@ -4,7 +4,7 @@ import {
 } from '@solana/kit';
 import bs58 from 'bs58';
 import * as bip39 from 'bip39';
-import { derivePath } from 'ed25519-hd-key';
+import { derivePath } from './slip0010';
 
 import { WalletAddress } from '@/domain/models/id';
 import { ipc } from '@/lib/ipc';
