@@ -33,7 +33,7 @@ function App() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-7xl flex-col md:flex-row">
+      <div className="flex min-h-screen w-full flex-col md:flex-row">
         <Sidebar activeView={activeView} onSelectView={setActiveView} />
 
         <section className="flex-1 p-5 md:p-8">
