@@ -20,10 +20,13 @@ interface OverlayRenderBase {
   label: string;
 }
 
+type ChartLineWidth = 1 | 2 | 3 | 4;
+
 export interface MovingAverageOverlay extends OverlayRenderBase {
   kind: 'sma' | 'ema';
   period: number;
   color: string;
+  lineWidth: ChartLineWidth;
 }
 
 export interface BollingerOverlay extends OverlayRenderBase {
@@ -33,6 +36,7 @@ export interface BollingerOverlay extends OverlayRenderBase {
   middleColor: string;
   upperColor: string;
   lowerColor: string;
+  lineWidth: ChartLineWidth;
 }
 
 export type OverlayRenderConfig = MovingAverageOverlay | BollingerOverlay;
@@ -65,6 +69,7 @@ export function IndicatorOverlay(props: IndicatorOverlayProps) {
         const lineSeries = chart.addSeries(LineSeries, {
           title: overlay.label,
           color: overlay.color,
+          lineWidth: overlay.lineWidth,
           priceLineVisible: false,
         });
         lineSeries.setData(toLineData(result.values, result.timestamps));
@@ -76,6 +81,7 @@ export function IndicatorOverlay(props: IndicatorOverlayProps) {
         const middleSeries = chart.addSeries(LineSeries, {
           title: `${overlay.label} mid`,
           color: overlay.middleColor,
+          lineWidth: overlay.lineWidth,
           priceLineVisible: false,
         });
         middleSeries.setData(toLineData(result.middle, result.timestamps));
@@ -84,6 +90,7 @@ export function IndicatorOverlay(props: IndicatorOverlayProps) {
         const upperSeries = chart.addSeries(LineSeries, {
           title: `${overlay.label} upper`,
           color: overlay.upperColor,
+          lineWidth: overlay.lineWidth,
           priceLineVisible: false,
         });
         upperSeries.setData(toLineData(result.upper, result.timestamps));
@@ -92,6 +99,7 @@ export function IndicatorOverlay(props: IndicatorOverlayProps) {
         const lowerSeries = chart.addSeries(LineSeries, {
           title: `${overlay.label} lower`,
           color: overlay.lowerColor,
+          lineWidth: overlay.lineWidth,
           priceLineVisible: false,
         });
         lowerSeries.setData(toLineData(result.lower, result.timestamps));

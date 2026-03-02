@@ -21,7 +21,8 @@ import { Candle } from '@/domain/models/market/Candle';
 import type { CandleInterval } from '@/domain/models/market/Candle';
 import {
   ChartToolbar,
-  type ChartOverlayOption,
+  type ChartIndicatorOption,
+  type ChartIndicatorPatch,
   type ChartTokenOption,
 } from '@/components/chart/ChartToolbar';
 import {
@@ -38,134 +39,108 @@ interface CandlestickChartProps {
   selectedTokenSymbol: string;
   availableTokens: readonly ChartTokenOption[];
   onTokenChange: (symbol: string) => void;
-  rsiPeriod?: number;
 }
 
 const TIMEFRAME_SWITCH_DEBOUNCE_MS = 250;
 const DEFAULT_CANDLE_LIMIT = 300;
-const MACD_FAST_PERIOD = 12;
-const MACD_SLOW_PERIOD = 26;
-const MACD_SIGNAL_PERIOD = 9;
-const DEFAULT_RSI_PERIOD = 14;
 const CHART_STACK_HEIGHT_PX = 520;
 const PANEL_HANDLE_HEIGHT_PX = 12;
 const MIN_RSI_PANEL_HEIGHT_PX = 110;
 const MAX_RSI_PANEL_HEIGHT_PX = 260;
-const DEFAULT_OVERLAY_SELECTION: Record<string, boolean> = {
-  'sma-7': false,
-  'sma-20': true,
-  'sma-50': false,
-  'sma-200': false,
-  'ema-9': false,
-  'ema-21': true,
-  'ema-55': false,
-  'bb-20': true,
-};
-const OVERLAY_PRESETS: ReadonlyArray<{
-  id: keyof typeof DEFAULT_OVERLAY_SELECTION;
-  label: string;
+const INDICATOR_STORAGE_KEY = 'terminal.candlestick.indicators.v1';
+type ChartLineWidth = 1 | 2 | 3 | 4;
+
+interface SmaIndicatorSettings {
+  kind: 'sma';
+  enabled: boolean;
+  period: number;
   color: string;
-  overlay: OverlayRenderConfig;
-}> = [
-  {
-    id: 'sma-7',
-    label: 'SMA 7',
-    color: '#93c5fd',
-    overlay: {
-      id: 'sma-7',
-      label: 'SMA 7',
-      kind: 'sma',
-      period: 7,
-      color: '#93c5fd',
-    },
-  },
-  {
-    id: 'sma-20',
-    label: 'SMA 20',
+  lineWidth: ChartLineWidth;
+}
+
+interface EmaIndicatorSettings {
+  kind: 'ema';
+  enabled: boolean;
+  period: number;
+  color: string;
+  lineWidth: ChartLineWidth;
+}
+
+interface BollingerIndicatorSettings {
+  kind: 'bollinger';
+  enabled: boolean;
+  period: number;
+  standardDeviationMultiplier: number;
+  color: string;
+  lineWidth: ChartLineWidth;
+}
+
+interface RsiIndicatorSettings {
+  kind: 'rsi';
+  enabled: boolean;
+  period: number;
+  color: string;
+  lineWidth: ChartLineWidth;
+}
+
+interface MacdIndicatorSettings {
+  kind: 'macd';
+  enabled: boolean;
+  fastPeriod: number;
+  slowPeriod: number;
+  signalPeriod: number;
+  color: string;
+  lineWidth: ChartLineWidth;
+}
+
+interface IndicatorSettingsState {
+  sma: SmaIndicatorSettings;
+  ema: EmaIndicatorSettings;
+  bollinger: BollingerIndicatorSettings;
+  rsi: RsiIndicatorSettings;
+  macd: MacdIndicatorSettings;
+}
+
+const DEFAULT_INDICATOR_SETTINGS: IndicatorSettingsState = {
+  sma: {
+    kind: 'sma',
+    enabled: true,
+    period: 20,
     color: '#38bdf8',
-    overlay: {
-      id: 'sma-20',
-      label: 'SMA 20',
-      kind: 'sma',
-      period: 20,
-      color: '#38bdf8',
-    },
+    lineWidth: 2,
   },
-  {
-    id: 'sma-50',
-    label: 'SMA 50',
-    color: '#2dd4bf',
-    overlay: {
-      id: 'sma-50',
-      label: 'SMA 50',
-      kind: 'sma',
-      period: 50,
-      color: '#2dd4bf',
-    },
-  },
-  {
-    id: 'sma-200',
-    label: 'SMA 200',
-    color: '#34d399',
-    overlay: {
-      id: 'sma-200',
-      label: 'SMA 200',
-      kind: 'sma',
-      period: 200,
-      color: '#34d399',
-    },
-  },
-  {
-    id: 'ema-9',
-    label: 'EMA 9',
-    color: '#fde047',
-    overlay: {
-      id: 'ema-9',
-      label: 'EMA 9',
-      kind: 'ema',
-      period: 9,
-      color: '#fde047',
-    },
-  },
-  {
-    id: 'ema-21',
-    label: 'EMA 21',
+  ema: {
+    kind: 'ema',
+    enabled: true,
+    period: 21,
     color: '#f59e0b',
-    overlay: {
-      id: 'ema-21',
-      label: 'EMA 21',
-      kind: 'ema',
-      period: 21,
-      color: '#f59e0b',
-    },
+    lineWidth: 2,
   },
-  {
-    id: 'ema-55',
-    label: 'EMA 55',
-    color: '#fb7185',
-    overlay: {
-      id: 'ema-55',
-      label: 'EMA 55',
-      kind: 'ema',
-      period: 55,
-      color: '#fb7185',
-    },
-  },
-  {
-    id: 'bb-20',
-    label: 'BB 20',
+  bollinger: {
+    kind: 'bollinger',
+    enabled: true,
+    period: 20,
+    standardDeviationMultiplier: 2,
     color: '#a78bfa',
-    overlay: {
-      id: 'bb-20',
-      label: 'Bollinger 20',
-      kind: 'bollinger',
-      period: 20,
-      middleColor: '#c4b5fd',
-      upperColor: '#a78bfa',
-      lowerColor: '#a78bfa',
-    },
+    lineWidth: 2,
   },
-];
+  rsi: {
+    kind: 'rsi',
+    enabled: true,
+    period: 14,
+    color: '#38bdf8',
+    lineWidth: 2,
+  },
+  macd: {
+    kind: 'macd',
+    enabled: true,
+    fastPeriod: 12,
+    slowPeriod: 26,
+    signalPeriod: 9,
+    color: '#3b82f6',
+    lineWidth: 2,
+  },
+};
 const geckoTerminalClient = new GeckoTerminalClient();
 const birdeyeApiKey =
   typeof import.meta.env.VITE_BIRDEYE_API_KEY === 'string' &&
@@ -185,6 +160,103 @@ const timeframeToSeconds: Record<CandleInterval, number> = {
   '4h': 14400,
   '1d': 86400,
 };
+
+function clampInteger(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function clampDecimal(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampLineWidth(value: number): ChartLineWidth {
+  const clampedValue = clampInteger(value, 1, 4);
+  if (clampedValue === 1 || clampedValue === 2 || clampedValue === 3 || clampedValue === 4) {
+    return clampedValue;
+  }
+
+  return 2;
+}
+
+function withAlpha(hexColor: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hexColor)) {
+    return `rgba(59, 130, 246, ${alpha})`;
+  }
+
+  const red = Number.parseInt(hexColor.slice(1, 3), 16);
+  const green = Number.parseInt(hexColor.slice(3, 5), 16);
+  const blue = Number.parseInt(hexColor.slice(5, 7), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function sanitizeIndicatorSettings(settings: IndicatorSettingsState): IndicatorSettingsState {
+  const fastPeriod = clampInteger(settings.macd.fastPeriod, 1, 200);
+  const slowPeriodBase = clampInteger(settings.macd.slowPeriod, 2, 300);
+  const slowPeriod = Math.max(slowPeriodBase, fastPeriod + 1);
+
+  return {
+    sma: {
+      ...settings.sma,
+      period: clampInteger(settings.sma.period, 1, 400),
+      lineWidth: clampLineWidth(settings.sma.lineWidth),
+    },
+    ema: {
+      ...settings.ema,
+      period: clampInteger(settings.ema.period, 1, 400),
+      lineWidth: clampLineWidth(settings.ema.lineWidth),
+    },
+    bollinger: {
+      ...settings.bollinger,
+      period: clampInteger(settings.bollinger.period, 1, 400),
+      standardDeviationMultiplier: clampDecimal(settings.bollinger.standardDeviationMultiplier, 0, 6),
+      lineWidth: clampLineWidth(settings.bollinger.lineWidth),
+    },
+    rsi: {
+      ...settings.rsi,
+      period: clampInteger(settings.rsi.period, 1, 400),
+      lineWidth: clampLineWidth(settings.rsi.lineWidth),
+    },
+    macd: {
+      ...settings.macd,
+      fastPeriod,
+      slowPeriod,
+      signalPeriod: clampInteger(settings.macd.signalPeriod, 1, 200),
+      lineWidth: clampLineWidth(settings.macd.lineWidth),
+    },
+  };
+}
+
+function loadIndicatorSettings(): IndicatorSettingsState {
+  if (typeof window === 'undefined') {
+    return DEFAULT_INDICATOR_SETTINGS;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(INDICATOR_STORAGE_KEY);
+    if (!storedValue) {
+      return DEFAULT_INDICATOR_SETTINGS;
+    }
+
+    const parsedValue = JSON.parse(storedValue) as Partial<IndicatorSettingsState>;
+    return sanitizeIndicatorSettings({
+      sma: { ...DEFAULT_INDICATOR_SETTINGS.sma, ...parsedValue.sma },
+      ema: { ...DEFAULT_INDICATOR_SETTINGS.ema, ...parsedValue.ema },
+      bollinger: { ...DEFAULT_INDICATOR_SETTINGS.bollinger, ...parsedValue.bollinger },
+      rsi: { ...DEFAULT_INDICATOR_SETTINGS.rsi, ...parsedValue.rsi },
+      macd: { ...DEFAULT_INDICATOR_SETTINGS.macd, ...parsedValue.macd },
+    });
+  } catch {
+    return DEFAULT_INDICATOR_SETTINGS;
+  }
+}
 
 export function CandlestickChart(props: CandlestickChartProps) {
   const mainContainerRef = useRef<HTMLDivElement | null>(null);
@@ -208,31 +280,220 @@ export function CandlestickChart(props: CandlestickChartProps) {
   const [timeframe, setTimeframe] = useState<CandleInterval>(selectedTimeframe);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [indicatorCandles, setIndicatorCandles] = useState<Candle[]>([]);
-  const [overlaySelection, setOverlaySelection] = useState<Record<string, boolean>>(DEFAULT_OVERLAY_SELECTION);
+  const [indicatorSettings, setIndicatorSettings] = useState<IndicatorSettingsState>(() => loadIndicatorSettings());
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const rsiPeriod = props.rsiPeriod ?? DEFAULT_RSI_PERIOD;
   const mainPanelHeight = CHART_STACK_HEIGHT_PX - rsiPanelHeight - PANEL_HANDLE_HEIGHT_PX;
-  const activeOverlayConfigs = useMemo(
-    () => OVERLAY_PRESETS.filter((preset) => overlaySelection[preset.id]).map((preset) => preset.overlay),
-    [overlaySelection],
-  );
-  const overlayToolbarOptions = useMemo<ChartOverlayOption[]>(
-    () =>
-      OVERLAY_PRESETS.map((preset) => ({
-        id: preset.id,
-        label: preset.label,
-        color: preset.color,
-        active: overlaySelection[preset.id],
-      })),
-    [overlaySelection],
+  const activeOverlayConfigs = useMemo<OverlayRenderConfig[]>(() => {
+    const overlays: OverlayRenderConfig[] = [];
+
+    if (indicatorSettings.sma.enabled) {
+      overlays.push({
+        id: 'sma',
+        label: 'SMA',
+        kind: 'sma',
+        period: indicatorSettings.sma.period,
+        color: indicatorSettings.sma.color,
+        lineWidth: indicatorSettings.sma.lineWidth,
+      });
+    }
+
+    if (indicatorSettings.ema.enabled) {
+      overlays.push({
+        id: 'ema',
+        label: 'EMA',
+        kind: 'ema',
+        period: indicatorSettings.ema.period,
+        color: indicatorSettings.ema.color,
+        lineWidth: indicatorSettings.ema.lineWidth,
+      });
+    }
+
+    if (indicatorSettings.bollinger.enabled) {
+      overlays.push({
+        id: 'bollinger',
+        label: 'Bollinger',
+        kind: 'bollinger',
+        period: indicatorSettings.bollinger.period,
+        standardDeviationMultiplier: indicatorSettings.bollinger.standardDeviationMultiplier,
+        middleColor: withAlpha(indicatorSettings.bollinger.color, 0.75),
+        upperColor: indicatorSettings.bollinger.color,
+        lowerColor: indicatorSettings.bollinger.color,
+        lineWidth: indicatorSettings.bollinger.lineWidth,
+      });
+    }
+
+    return overlays;
+  }, [indicatorSettings]);
+  const indicatorToolbarOptions = useMemo<ChartIndicatorOption[]>(
+    () => [
+      {
+        id: 'sma',
+        kind: 'sma',
+        label: 'SMA',
+        pillLabel: `SMA ${indicatorSettings.sma.period}`,
+        color: indicatorSettings.sma.color,
+        lineWidth: indicatorSettings.sma.lineWidth,
+        active: indicatorSettings.sma.enabled,
+        period: indicatorSettings.sma.period,
+      },
+      {
+        id: 'ema',
+        kind: 'ema',
+        label: 'EMA',
+        pillLabel: `EMA ${indicatorSettings.ema.period}`,
+        color: indicatorSettings.ema.color,
+        lineWidth: indicatorSettings.ema.lineWidth,
+        active: indicatorSettings.ema.enabled,
+        period: indicatorSettings.ema.period,
+      },
+      {
+        id: 'bollinger',
+        kind: 'bollinger',
+        label: 'Bollinger Bands',
+        pillLabel: `BB ${indicatorSettings.bollinger.period}`,
+        color: indicatorSettings.bollinger.color,
+        lineWidth: indicatorSettings.bollinger.lineWidth,
+        active: indicatorSettings.bollinger.enabled,
+        period: indicatorSettings.bollinger.period,
+        standardDeviationMultiplier: indicatorSettings.bollinger.standardDeviationMultiplier,
+      },
+      {
+        id: 'rsi',
+        kind: 'rsi',
+        label: 'RSI',
+        pillLabel: `RSI ${indicatorSettings.rsi.period}`,
+        color: indicatorSettings.rsi.color,
+        lineWidth: indicatorSettings.rsi.lineWidth,
+        active: indicatorSettings.rsi.enabled,
+        period: indicatorSettings.rsi.period,
+      },
+      {
+        id: 'macd',
+        kind: 'macd',
+        label: 'MACD',
+        pillLabel: `MACD ${indicatorSettings.macd.fastPeriod}/${indicatorSettings.macd.slowPeriod}/${indicatorSettings.macd.signalPeriod}`,
+        color: indicatorSettings.macd.color,
+        lineWidth: indicatorSettings.macd.lineWidth,
+        active: indicatorSettings.macd.enabled,
+        fastPeriod: indicatorSettings.macd.fastPeriod,
+        slowPeriod: indicatorSettings.macd.slowPeriod,
+        signalPeriod: indicatorSettings.macd.signalPeriod,
+      },
+    ],
+    [indicatorSettings],
   );
 
-  const handleOverlayToggle = (overlayId: string) => {
-    setOverlaySelection((previousSelection) => ({
-      ...previousSelection,
-      [overlayId]: !previousSelection[overlayId],
-    }));
+  const handleIndicatorToggle = (indicatorId: string) => {
+    setIndicatorSettings((previousSettings) => {
+      switch (indicatorId) {
+        case 'sma':
+          return { ...previousSettings, sma: { ...previousSettings.sma, enabled: !previousSettings.sma.enabled } };
+        case 'ema':
+          return { ...previousSettings, ema: { ...previousSettings.ema, enabled: !previousSettings.ema.enabled } };
+        case 'bollinger':
+          return {
+            ...previousSettings,
+            bollinger: { ...previousSettings.bollinger, enabled: !previousSettings.bollinger.enabled },
+          };
+        case 'rsi':
+          return { ...previousSettings, rsi: { ...previousSettings.rsi, enabled: !previousSettings.rsi.enabled } };
+        case 'macd':
+          return { ...previousSettings, macd: { ...previousSettings.macd, enabled: !previousSettings.macd.enabled } };
+        default:
+          return previousSettings;
+      }
+    });
+  };
+
+  const handleIndicatorPatch = (indicatorId: string, patch: ChartIndicatorPatch) => {
+    setIndicatorSettings((previousSettings) => {
+      switch (indicatorId) {
+        case 'sma':
+          return sanitizeIndicatorSettings({
+            ...previousSettings,
+            sma: {
+              ...previousSettings.sma,
+              color: patch.color ?? previousSettings.sma.color,
+              lineWidth: patch.lineWidth !== undefined ? clampLineWidth(patch.lineWidth) : previousSettings.sma.lineWidth,
+              period: patch.period ?? previousSettings.sma.period,
+            },
+          });
+        case 'ema':
+          return sanitizeIndicatorSettings({
+            ...previousSettings,
+            ema: {
+              ...previousSettings.ema,
+              color: patch.color ?? previousSettings.ema.color,
+              lineWidth: patch.lineWidth !== undefined ? clampLineWidth(patch.lineWidth) : previousSettings.ema.lineWidth,
+              period: patch.period ?? previousSettings.ema.period,
+            },
+          });
+        case 'bollinger':
+          return sanitizeIndicatorSettings({
+            ...previousSettings,
+            bollinger: {
+              ...previousSettings.bollinger,
+              color: patch.color ?? previousSettings.bollinger.color,
+              lineWidth:
+                patch.lineWidth !== undefined
+                  ? clampLineWidth(patch.lineWidth)
+                  : previousSettings.bollinger.lineWidth,
+              period: patch.period ?? previousSettings.bollinger.period,
+              standardDeviationMultiplier:
+                patch.standardDeviationMultiplier ?? previousSettings.bollinger.standardDeviationMultiplier,
+            },
+          });
+        case 'rsi':
+          return sanitizeIndicatorSettings({
+            ...previousSettings,
+            rsi: {
+              ...previousSettings.rsi,
+              color: patch.color ?? previousSettings.rsi.color,
+              lineWidth: patch.lineWidth !== undefined ? clampLineWidth(patch.lineWidth) : previousSettings.rsi.lineWidth,
+              period: patch.period ?? previousSettings.rsi.period,
+            },
+          });
+        case 'macd':
+          return sanitizeIndicatorSettings({
+            ...previousSettings,
+            macd: {
+              ...previousSettings.macd,
+              color: patch.color ?? previousSettings.macd.color,
+              lineWidth:
+                patch.lineWidth !== undefined ? clampLineWidth(patch.lineWidth) : previousSettings.macd.lineWidth,
+              fastPeriod: patch.fastPeriod ?? previousSettings.macd.fastPeriod,
+              slowPeriod: patch.slowPeriod ?? previousSettings.macd.slowPeriod,
+              signalPeriod: patch.signalPeriod ?? previousSettings.macd.signalPeriod,
+            },
+          });
+        default:
+          return previousSettings;
+      }
+    });
+  };
+
+  const handleIndicatorRemove = (indicatorId: string) => {
+    setIndicatorSettings((previousSettings) => {
+      switch (indicatorId) {
+        case 'sma':
+          return { ...previousSettings, sma: { ...previousSettings.sma, enabled: false } };
+        case 'ema':
+          return { ...previousSettings, ema: { ...previousSettings.ema, enabled: false } };
+        case 'bollinger':
+          return { ...previousSettings, bollinger: { ...previousSettings.bollinger, enabled: false } };
+        case 'rsi':
+          return { ...previousSettings, rsi: { ...previousSettings.rsi, enabled: false } };
+        case 'macd':
+          return { ...previousSettings, macd: { ...previousSettings.macd, enabled: false } };
+        default:
+          return previousSettings;
+      }
+    });
+  };
+
+  const handleResetIndicators = () => {
+    setIndicatorSettings(DEFAULT_INDICATOR_SETTINGS);
   };
 
   useEffect(() => {
@@ -244,6 +505,14 @@ export function CandlestickChart(props: CandlestickChartProps) {
       window.clearTimeout(timeoutId);
     };
   }, [selectedTimeframe]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(INDICATOR_STORAGE_KEY, JSON.stringify(indicatorSettings));
+  }, [indicatorSettings]);
 
   useEffect(() => {
     if (!mainContainerRef.current || !rsiContainerRef.current) {
@@ -576,6 +845,21 @@ export function CandlestickChart(props: CandlestickChartProps) {
   }, [mainPanelHeight, rsiPanelHeight]);
 
   useEffect(() => {
+    macdRef.current?.applyOptions({
+      color: indicatorSettings.macd.color,
+      lineWidth: indicatorSettings.macd.lineWidth,
+    });
+    signalRef.current?.applyOptions({
+      color: withAlpha(indicatorSettings.macd.color, 0.68),
+      lineWidth: indicatorSettings.macd.lineWidth,
+    });
+    rsiRef.current?.applyOptions({
+      color: indicatorSettings.rsi.color,
+      lineWidth: indicatorSettings.rsi.lineWidth,
+    });
+  }, [indicatorSettings.macd.color, indicatorSettings.macd.lineWidth, indicatorSettings.rsi.color, indicatorSettings.rsi.lineWidth]);
+
+  useEffect(() => {
     if (
       !candlesRef.current ||
       !volumeRef.current ||
@@ -641,45 +925,53 @@ export function CandlestickChart(props: CandlestickChartProps) {
             }),
         );
 
-        const macdValues = computeMacd(candlePoints, {
-          fastPeriod: MACD_FAST_PERIOD,
-          slowPeriod: MACD_SLOW_PERIOD,
-          signalPeriod: MACD_SIGNAL_PERIOD,
-        });
         const macdLine: LineData[] = [];
         const signalLine: LineData[] = [];
         const macdHistogram: HistogramData[] = [];
 
-        candlePoints.forEach((point, index) => {
-          const time = point.openTimeUnixSec as UTCTimestamp;
-          const macdValue = macdValues.macd[index];
-          const signalValue = macdValues.signal[index];
-          const histogramValue = macdValues.histogram[index];
+        if (indicatorSettings.macd.enabled) {
+          const macdValues = computeMacd(candlePoints, {
+            fastPeriod: indicatorSettings.macd.fastPeriod,
+            slowPeriod: indicatorSettings.macd.slowPeriod,
+            signalPeriod: indicatorSettings.macd.signalPeriod,
+          });
 
-          if (macdValue !== null) {
-            macdLine.push({
-              time,
-              value: macdValue,
-            });
-          }
+          candlePoints.forEach((point, index) => {
+            const time = point.openTimeUnixSec as UTCTimestamp;
+            const macdValue = macdValues.macd[index];
+            const signalValue = macdValues.signal[index];
+            const histogramValue = macdValues.histogram[index];
 
-          if (signalValue !== null) {
-            signalLine.push({
-              time,
-              value: signalValue,
-            });
-          }
+            if (macdValue !== null) {
+              macdLine.push({
+                time,
+                value: macdValue,
+              });
+            }
 
-          if (histogramValue !== null) {
-            macdHistogram.push({
-              time,
-              value: histogramValue,
-              color: histogramValue >= 0 ? 'rgba(34, 197, 94, 0.65)' : 'rgba(239, 68, 68, 0.65)',
-            });
-          }
-        });
+            if (signalValue !== null) {
+              signalLine.push({
+                time,
+                value: signalValue,
+              });
+            }
 
-        const rsiValues = computeRsi(candleModels, rsiPeriod);
+            if (histogramValue !== null) {
+              macdHistogram.push({
+                time,
+                value: histogramValue,
+                color:
+                  histogramValue >= 0
+                    ? withAlpha(indicatorSettings.macd.color, 0.55)
+                    : withAlpha('#ef4444', 0.65),
+              });
+            }
+          });
+        }
+
+        const rsiValues = indicatorSettings.rsi.enabled
+          ? computeRsi(candleModels, indicatorSettings.rsi.period)
+          : candleModels.map(() => null);
         const rsiData: LineData[] = [];
         closePriceByTimeRef.current = new Map();
         rsiByTimeRef.current = new Map();
@@ -728,7 +1020,18 @@ export function CandlestickChart(props: CandlestickChartProps) {
     return () => {
       isCancelled = true;
     };
-  }, [props.poolAddress, props.tokenMint, rsiPeriod, timeframe]);
+  }, [
+    indicatorSettings.macd.color,
+    indicatorSettings.macd.enabled,
+    indicatorSettings.macd.fastPeriod,
+    indicatorSettings.macd.signalPeriod,
+    indicatorSettings.macd.slowPeriod,
+    indicatorSettings.rsi.enabled,
+    indicatorSettings.rsi.period,
+    props.poolAddress,
+    props.tokenMint,
+    timeframe,
+  ]);
 
   const handleStartResize = () => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -767,14 +1070,17 @@ export function CandlestickChart(props: CandlestickChartProps) {
         selectedTokenSymbol={props.selectedTokenSymbol}
         tokenOptions={props.availableTokens}
         onTokenChange={props.onTokenChange}
-        overlays={overlayToolbarOptions}
-        onOverlayToggle={handleOverlayToggle}
+        indicators={indicatorToolbarOptions}
+        onIndicatorToggle={handleIndicatorToggle}
+        onIndicatorPatch={handleIndicatorPatch}
+        onIndicatorRemove={handleIndicatorRemove}
+        onResetIndicators={handleResetIndicators}
       />
 
       <div className="mt-3 flex items-center justify-between gap-2 px-1">
         <p className="text-[0.68rem] uppercase tracking-[0.16em] text-slate-400">Indicators</p>
         <p className="text-xs text-slate-300">
-          MACD ({MACD_FAST_PERIOD},{MACD_SLOW_PERIOD},{MACD_SIGNAL_PERIOD}) + RSI ({rsiPeriod}) + overlays ({activeOverlayConfigs.length})
+          MACD ({indicatorSettings.macd.fastPeriod},{indicatorSettings.macd.slowPeriod},{indicatorSettings.macd.signalPeriod}) + RSI ({indicatorSettings.rsi.period}) + overlays ({activeOverlayConfigs.length})
         </p>
       </div>
 
