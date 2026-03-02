@@ -5,12 +5,21 @@ export interface ChartTokenOption {
   name: string;
 }
 
+export interface ChartOverlayOption {
+  id: string;
+  label: string;
+  color: string;
+  active: boolean;
+}
+
 interface ChartToolbarProps {
   selectedTimeframe: CandleInterval;
   onTimeframeChange: (timeframe: CandleInterval) => void;
   selectedTokenSymbol: string;
   tokenOptions: readonly ChartTokenOption[];
   onTokenChange: (symbol: string) => void;
+  overlays: readonly ChartOverlayOption[];
+  onOverlayToggle: (overlayId: string) => void;
   disabled?: boolean;
 }
 
@@ -55,6 +64,35 @@ export function ChartToolbar(props: ChartToolbarProps) {
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-3 border-t border-slate-800 pt-2">
+        <p className="mb-2 text-[0.65rem] uppercase tracking-[0.16em] text-slate-400">Overlays</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {props.overlays.map((overlay) => (
+            <button
+              key={overlay.id}
+              type="button"
+              disabled={props.disabled}
+              onClick={() => props.onOverlayToggle(overlay.id)}
+              className={`rounded-md border px-2 py-1 text-[0.68rem] transition-colors ${
+                overlay.active
+                  ? 'text-slate-950'
+                  : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-slate-100'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+              style={
+                overlay.active
+                  ? {
+                      borderColor: overlay.color,
+                      backgroundColor: overlay.color,
+                    }
+                  : undefined
+              }
+            >
+              {overlay.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BaselineSeries,
   CandlestickSeries,
@@ -19,7 +19,15 @@ import { BirdeyeClient } from '@/data/sources/api/BirdeyeClient';
 import { GeckoTerminalClient } from '@/data/sources/api/GeckoTerminalClient';
 import { Candle } from '@/domain/models/market/Candle';
 import type { CandleInterval } from '@/domain/models/market/Candle';
-import { ChartToolbar, type ChartTokenOption } from '@/components/chart/ChartToolbar';
+import {
+  ChartToolbar,
+  type ChartOverlayOption,
+  type ChartTokenOption,
+} from '@/components/chart/ChartToolbar';
+import {
+  IndicatorOverlay,
+  type OverlayRenderConfig,
+} from '@/components/chart/IndicatorOverlay';
 import { computeMacd } from '@/features/indicators/macd';
 import { computeRsi } from '@/features/indicators/rsi';
 import { OhlcvMarketDataService } from '@/features/market-data/OhlcvMarketDataService';
@@ -43,6 +51,121 @@ const CHART_STACK_HEIGHT_PX = 520;
 const PANEL_HANDLE_HEIGHT_PX = 12;
 const MIN_RSI_PANEL_HEIGHT_PX = 110;
 const MAX_RSI_PANEL_HEIGHT_PX = 260;
+const DEFAULT_OVERLAY_SELECTION: Record<string, boolean> = {
+  'sma-7': false,
+  'sma-20': true,
+  'sma-50': false,
+  'sma-200': false,
+  'ema-9': false,
+  'ema-21': true,
+  'ema-55': false,
+  'bb-20': true,
+};
+const OVERLAY_PRESETS: ReadonlyArray<{
+  id: keyof typeof DEFAULT_OVERLAY_SELECTION;
+  label: string;
+  color: string;
+  overlay: OverlayRenderConfig;
+}> = [
+  {
+    id: 'sma-7',
+    label: 'SMA 7',
+    color: '#93c5fd',
+    overlay: {
+      id: 'sma-7',
+      label: 'SMA 7',
+      kind: 'sma',
+      period: 7,
+      color: '#93c5fd',
+    },
+  },
+  {
+    id: 'sma-20',
+    label: 'SMA 20',
+    color: '#38bdf8',
+    overlay: {
+      id: 'sma-20',
+      label: 'SMA 20',
+      kind: 'sma',
+      period: 20,
+      color: '#38bdf8',
+    },
+  },
+  {
+    id: 'sma-50',
+    label: 'SMA 50',
+    color: '#2dd4bf',
+    overlay: {
+      id: 'sma-50',
+      label: 'SMA 50',
+      kind: 'sma',
+      period: 50,
+      color: '#2dd4bf',
+    },
+  },
+  {
+    id: 'sma-200',
+    label: 'SMA 200',
+    color: '#34d399',
+    overlay: {
+      id: 'sma-200',
+      label: 'SMA 200',
+      kind: 'sma',
+      period: 200,
+      color: '#34d399',
+    },
+  },
+  {
+    id: 'ema-9',
+    label: 'EMA 9',
+    color: '#fde047',
+    overlay: {
+      id: 'ema-9',
+      label: 'EMA 9',
+      kind: 'ema',
+      period: 9,
+      color: '#fde047',
+    },
+  },
+  {
+    id: 'ema-21',
+    label: 'EMA 21',
+    color: '#f59e0b',
+    overlay: {
+      id: 'ema-21',
+      label: 'EMA 21',
+      kind: 'ema',
+      period: 21,
+      color: '#f59e0b',
+    },
+  },
+  {
+    id: 'ema-55',
+    label: 'EMA 55',
+    color: '#fb7185',
+    overlay: {
+      id: 'ema-55',
+      label: 'EMA 55',
+      kind: 'ema',
+      period: 55,
+      color: '#fb7185',
+    },
+  },
+  {
+    id: 'bb-20',
+    label: 'BB 20',
+    color: '#a78bfa',
+    overlay: {
+      id: 'bb-20',
+      label: 'Bollinger 20',
+      kind: 'bollinger',
+      period: 20,
+      middleColor: '#c4b5fd',
+      upperColor: '#a78bfa',
+      lowerColor: '#a78bfa',
+    },
+  },
+];
 const geckoTerminalClient = new GeckoTerminalClient();
 const birdeyeApiKey =
   typeof import.meta.env.VITE_BIRDEYE_API_KEY === 'string' &&
@@ -83,10 +206,34 @@ export function CandlestickChart(props: CandlestickChartProps) {
   const [rsiPanelHeight, setRsiPanelHeight] = useState<number>(160);
   const [selectedTimeframe, setSelectedTimeframe] = useState<CandleInterval>('15m');
   const [timeframe, setTimeframe] = useState<CandleInterval>(selectedTimeframe);
+  const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
+  const [indicatorCandles, setIndicatorCandles] = useState<Candle[]>([]);
+  const [overlaySelection, setOverlaySelection] = useState<Record<string, boolean>>(DEFAULT_OVERLAY_SELECTION);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const rsiPeriod = props.rsiPeriod ?? DEFAULT_RSI_PERIOD;
   const mainPanelHeight = CHART_STACK_HEIGHT_PX - rsiPanelHeight - PANEL_HANDLE_HEIGHT_PX;
+  const activeOverlayConfigs = useMemo(
+    () => OVERLAY_PRESETS.filter((preset) => overlaySelection[preset.id]).map((preset) => preset.overlay),
+    [overlaySelection],
+  );
+  const overlayToolbarOptions = useMemo<ChartOverlayOption[]>(
+    () =>
+      OVERLAY_PRESETS.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        color: preset.color,
+        active: overlaySelection[preset.id],
+      })),
+    [overlaySelection],
+  );
+
+  const handleOverlayToggle = (overlayId: string) => {
+    setOverlaySelection((previousSelection) => ({
+      ...previousSelection,
+      [overlayId]: !previousSelection[overlayId],
+    }));
+  };
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -288,6 +435,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
     });
 
     mainChartRef.current = mainChart;
+    setMainChartApi(mainChart);
     rsiChartRef.current = rsiChart;
     candlesRef.current = candleSeries;
     volumeRef.current = volumeSeries;
@@ -395,6 +543,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
       rsiChart.remove();
 
       mainChartRef.current = null;
+      setMainChartApi(null);
       rsiChartRef.current = null;
       candlesRef.current = null;
       volumeRef.current = null;
@@ -406,6 +555,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
       rsiAboveRef.current = null;
       closePriceByTimeRef.current = new Map();
       rsiByTimeRef.current = new Map();
+      setIndicatorCandles([]);
     };
   }, []);
 
@@ -479,6 +629,18 @@ export function CandlestickChart(props: CandlestickChartProps) {
           color: point.close >= point.open ? 'rgba(34, 197, 94, 0.35)' : 'rgba(239, 68, 68, 0.35)',
         }));
 
+        const candleModels = candlePoints.map(
+          (point) =>
+            new Candle({
+              openTimeUnixSec: point.openTimeUnixSec,
+              open: point.open,
+              high: point.high,
+              low: point.low,
+              close: point.close,
+              volume: point.volume,
+            }),
+        );
+
         const macdValues = computeMacd(candlePoints, {
           fastPeriod: MACD_FAST_PERIOD,
           slowPeriod: MACD_SLOW_PERIOD,
@@ -517,18 +679,6 @@ export function CandlestickChart(props: CandlestickChartProps) {
           }
         });
 
-        const candleModels = candlePoints.map(
-          (point) =>
-            new Candle({
-              openTimeUnixSec: point.openTimeUnixSec,
-              open: point.open,
-              high: point.high,
-              low: point.low,
-              close: point.close,
-              volume: point.volume,
-            }),
-        );
-
         const rsiValues = computeRsi(candleModels, rsiPeriod);
         const rsiData: LineData[] = [];
         closePriceByTimeRef.current = new Map();
@@ -556,6 +706,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
         rsiRef.current?.setData(rsiData);
         rsiBelowRef.current?.setData(rsiData);
         rsiAboveRef.current?.setData(rsiData);
+        setIndicatorCandles(candleModels);
         mainChartRef.current?.timeScale().fitContent();
         rsiChartRef.current?.timeScale().fitContent();
       } catch (cause) {
@@ -563,6 +714,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
           return;
         }
 
+        setIndicatorCandles([]);
         setError(cause instanceof Error ? cause.message : 'Failed to load candle data.');
       } finally {
         if (!isCancelled) {
@@ -615,12 +767,18 @@ export function CandlestickChart(props: CandlestickChartProps) {
         selectedTokenSymbol={props.selectedTokenSymbol}
         tokenOptions={props.availableTokens}
         onTokenChange={props.onTokenChange}
+        overlays={overlayToolbarOptions}
+        onOverlayToggle={handleOverlayToggle}
       />
 
       <div className="mt-3 flex items-center justify-between gap-2 px-1">
         <p className="text-[0.68rem] uppercase tracking-[0.16em] text-slate-400">Indicators</p>
-        <p className="text-xs text-slate-300">MACD ({MACD_FAST_PERIOD},{MACD_SLOW_PERIOD},{MACD_SIGNAL_PERIOD}) + RSI ({rsiPeriod})</p>
+        <p className="text-xs text-slate-300">
+          MACD ({MACD_FAST_PERIOD},{MACD_SLOW_PERIOD},{MACD_SIGNAL_PERIOD}) + RSI ({rsiPeriod}) + overlays ({activeOverlayConfigs.length})
+        </p>
       </div>
+
+      <IndicatorOverlay chart={mainChartApi} candles={indicatorCandles} overlays={activeOverlayConfigs} />
 
       <div className="mt-3 overflow-hidden rounded-lg border border-slate-800 bg-slate-950/80">
         <div
