@@ -4,10 +4,12 @@ import {
   ColorType,
   CrosshairMode,
   HistogramSeries,
+  LineSeries,
   createChart,
   type CandlestickData,
   type HistogramData,
   type IChartApi,
+  type LineData,
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
@@ -15,6 +17,7 @@ import { BirdeyeClient } from '@/data/sources/api/BirdeyeClient';
 import { GeckoTerminalClient } from '@/data/sources/api/GeckoTerminalClient';
 import type { CandleInterval } from '@/domain/models/market/Candle';
 import { ChartToolbar, type ChartTokenOption } from '@/components/chart/ChartToolbar';
+import { computeMacd } from '@/features/indicators/macd';
 import { OhlcvMarketDataService } from '@/features/market-data/OhlcvMarketDataService';
 
 interface CandlestickChartProps {
@@ -27,6 +30,9 @@ interface CandlestickChartProps {
 
 const TIMEFRAME_SWITCH_DEBOUNCE_MS = 250;
 const DEFAULT_CANDLE_LIMIT = 300;
+const MACD_FAST_PERIOD = 12;
+const MACD_SLOW_PERIOD = 26;
+const MACD_SIGNAL_PERIOD = 9;
 const geckoTerminalClient = new GeckoTerminalClient();
 const birdeyeApiKey =
   typeof import.meta.env.VITE_BIRDEYE_API_KEY === 'string' &&
@@ -52,6 +58,9 @@ export function CandlestickChart(props: CandlestickChartProps) {
   const chartRef = useRef<IChartApi | null>(null);
   const candlesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const macdRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const signalRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const macdHistogramRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState<CandleInterval>('15m');
   const [timeframe, setTimeframe] = useState<CandleInterval>(selectedTimeframe);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -80,6 +89,11 @@ export function CandlestickChart(props: CandlestickChartProps) {
           color: '#020617',
         },
         textColor: '#cbd5e1',
+        panes: {
+          enableResize: true,
+          separatorColor: '#1e293b',
+          separatorHoverColor: '#334155',
+        },
       },
       grid: {
         vertLines: {
@@ -120,6 +134,38 @@ export function CandlestickChart(props: CandlestickChartProps) {
       priceLineVisible: false,
     });
 
+    const macdSeries = chart.addSeries(
+      LineSeries,
+      {
+        color: '#3b82f6',
+        lineWidth: 2,
+        title: 'MACD',
+        crosshairMarkerVisible: true,
+      },
+      1,
+    );
+
+    const signalSeries = chart.addSeries(
+      LineSeries,
+      {
+        color: '#f59e0b',
+        lineWidth: 2,
+        title: 'Signal',
+        crosshairMarkerVisible: true,
+      },
+      1,
+    );
+
+    const macdHistogramSeries = chart.addSeries(
+      HistogramSeries,
+      {
+        title: 'Histogram',
+        lastValueVisible: false,
+        priceLineVisible: false,
+      },
+      1,
+    );
+
     chart.priceScale('').applyOptions({
       scaleMargins: {
         top: 0.8,
@@ -130,6 +176,19 @@ export function CandlestickChart(props: CandlestickChartProps) {
     chartRef.current = chart;
     candlesRef.current = candleSeries;
     volumeRef.current = volumeSeries;
+    macdRef.current = macdSeries;
+    signalRef.current = signalSeries;
+    macdHistogramRef.current = macdHistogramSeries;
+
+    const chartWithPanes = chart as unknown as {
+      panes?: () => Array<{ setHeight: (height: number) => void }>;
+    };
+    if (typeof chartWithPanes.panes === 'function') {
+      const panes = chartWithPanes.panes();
+      if (panes.length > 1) {
+        panes[1].setHeight(150);
+      }
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       chart.timeScale().fitContent();
@@ -143,11 +202,21 @@ export function CandlestickChart(props: CandlestickChartProps) {
       chartRef.current = null;
       candlesRef.current = null;
       volumeRef.current = null;
+      macdRef.current = null;
+      signalRef.current = null;
+      macdHistogramRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!candlesRef.current || !volumeRef.current || !chartRef.current) {
+    if (
+      !candlesRef.current ||
+      !volumeRef.current ||
+      !macdRef.current ||
+      !signalRef.current ||
+      !macdHistogramRef.current ||
+      !chartRef.current
+    ) {
       return;
     }
 
@@ -189,8 +258,49 @@ export function CandlestickChart(props: CandlestickChartProps) {
           color: point.close >= point.open ? 'rgba(34, 197, 94, 0.35)' : 'rgba(239, 68, 68, 0.35)',
         }));
 
+        const macdValues = computeMacd(candlePoints, {
+          fastPeriod: MACD_FAST_PERIOD,
+          slowPeriod: MACD_SLOW_PERIOD,
+          signalPeriod: MACD_SIGNAL_PERIOD,
+        });
+        const macdLine: LineData[] = [];
+        const signalLine: LineData[] = [];
+        const macdHistogram: HistogramData[] = [];
+
+        candlePoints.forEach((point, index) => {
+          const time = point.openTimeUnixSec as UTCTimestamp;
+          const macdValue = macdValues.macd[index];
+          const signalValue = macdValues.signal[index];
+          const histogramValue = macdValues.histogram[index];
+
+          if (macdValue !== null) {
+            macdLine.push({
+              time,
+              value: macdValue,
+            });
+          }
+
+          if (signalValue !== null) {
+            signalLine.push({
+              time,
+              value: signalValue,
+            });
+          }
+
+          if (histogramValue !== null) {
+            macdHistogram.push({
+              time,
+              value: histogramValue,
+              color: histogramValue >= 0 ? 'rgba(34, 197, 94, 0.65)' : 'rgba(239, 68, 68, 0.65)',
+            });
+          }
+        });
+
         candlesRef.current?.setData(candles);
         volumeRef.current?.setData(volumes);
+        macdRef.current?.setData(macdLine);
+        signalRef.current?.setData(signalLine);
+        macdHistogramRef.current?.setData(macdHistogram);
         chartRef.current?.timeScale().fitContent();
       } catch (cause) {
         if (isCancelled) {
@@ -229,6 +339,11 @@ export function CandlestickChart(props: CandlestickChartProps) {
         tokenOptions={props.availableTokens}
         onTokenChange={props.onTokenChange}
       />
+
+      <div className="mt-3 flex items-center justify-between gap-2 px-1">
+        <p className="text-[0.68rem] uppercase tracking-[0.16em] text-slate-400">Indicators</p>
+        <p className="text-xs text-slate-300">MACD ({MACD_FAST_PERIOD},{MACD_SLOW_PERIOD},{MACD_SIGNAL_PERIOD})</p>
+      </div>
 
       <div ref={containerRef} className="mt-3 h-[420px] w-full overflow-hidden rounded-lg border border-slate-800" />
 
