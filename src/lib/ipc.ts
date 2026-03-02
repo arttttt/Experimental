@@ -3,8 +3,88 @@ export type WalletCryptoApi = Readonly<{
   decrypt: (encryptedBase64: string, password: string) => Promise<string>;
 }>;
 
+export type TradeSide = 'buy' | 'sell';
+export type TradeStatus = 'pending' | 'filled' | 'cancelled' | 'failed';
+
+export type TradeRecord = Readonly<{
+  id: string;
+  pair: string;
+  side: TradeSide;
+  quantity: number;
+  price: number;
+  fee: number;
+  timestamp: number;
+  status: TradeStatus;
+  createdAt: number;
+  updatedAt: number;
+}>;
+
+export type CreateTradeInput = Readonly<{
+  id?: string;
+  pair: string;
+  side: TradeSide;
+  quantity: number;
+  price: number;
+  fee?: number;
+  timestamp: number;
+  status?: TradeStatus;
+}>;
+
+export type TradeFilters = Readonly<{
+  pair?: string;
+  status?: TradeStatus;
+  fromTimestamp?: number;
+  toTimestamp?: number;
+  limit?: number;
+  offset?: number;
+}>;
+
+export type UpdateTradeInput = Readonly<{
+  pair?: string;
+  side?: TradeSide;
+  quantity?: number;
+  price?: number;
+  fee?: number;
+  timestamp?: number;
+  status?: TradeStatus;
+}>;
+
+export type PortfolioSnapshotRecord = Readonly<{
+  id: string;
+  capturedAt: number;
+  totalValue: number;
+  holdingsJson: string;
+  createdAt: number;
+}>;
+
+export type CreatePortfolioSnapshotInput = Readonly<{
+  id?: string;
+  capturedAt: number;
+  totalValue: number;
+  holdings: unknown;
+}>;
+
+export type PortfolioSnapshotFilters = Readonly<{
+  fromTimestamp?: number;
+  toTimestamp?: number;
+  limit?: number;
+  offset?: number;
+}>;
+
+export type TradingDbApi = Readonly<{
+  createTrade: (trade: CreateTradeInput) => Promise<TradeRecord>;
+  listTrades: (filters?: TradeFilters) => Promise<ReadonlyArray<TradeRecord>>;
+  updateTrade: (id: string, patch: UpdateTradeInput) => Promise<TradeRecord>;
+  deleteTrade: (id: string) => Promise<boolean>;
+  createPortfolioSnapshot: (snapshot: CreatePortfolioSnapshotInput) => Promise<PortfolioSnapshotRecord>;
+  listPortfolioSnapshots: (filters?: PortfolioSnapshotFilters) => Promise<ReadonlyArray<PortfolioSnapshotRecord>>;
+  deletePortfolioSnapshot: (id: string) => Promise<boolean>;
+}>;
+
 const WALLET_CRYPTO_UNAVAILABLE_ERROR =
   'Wallet crypto API is unavailable. Use the Electron app shell to access secure key operations.';
+const TRADING_DB_UNAVAILABLE_ERROR =
+  'Trading DB API is unavailable. Use the Electron app shell to access SQLite-backed storage.';
 
 const walletCryptoApiOrThrow = (): WalletCryptoApi => {
   const walletCrypto = window.walletCrypto;
@@ -19,6 +99,24 @@ const walletCryptoApiOrThrow = (): WalletCryptoApi => {
   throw new Error(WALLET_CRYPTO_UNAVAILABLE_ERROR);
 };
 
+const tradingDbApiOrThrow = (): TradingDbApi => {
+  const tradingDb = window.tradingDb;
+
+  if (
+    typeof tradingDb?.createTrade === 'function' &&
+    typeof tradingDb?.listTrades === 'function' &&
+    typeof tradingDb?.updateTrade === 'function' &&
+    typeof tradingDb?.deleteTrade === 'function' &&
+    typeof tradingDb?.createPortfolioSnapshot === 'function' &&
+    typeof tradingDb?.listPortfolioSnapshots === 'function' &&
+    typeof tradingDb?.deletePortfolioSnapshot === 'function'
+  ) {
+    return tradingDb;
+  }
+
+  throw new Error(TRADING_DB_UNAVAILABLE_ERROR);
+};
+
 export const ipc = {
   crypto: {
     encrypt: async (plaintext: string, password: string) => {
@@ -28,4 +126,27 @@ export const ipc = {
       return walletCryptoApiOrThrow().decrypt(encryptedBase64, password);
     },
   } satisfies WalletCryptoApi,
+  db: {
+    createTrade: async (trade: CreateTradeInput) => {
+      return tradingDbApiOrThrow().createTrade(trade);
+    },
+    listTrades: async (filters?: TradeFilters) => {
+      return tradingDbApiOrThrow().listTrades(filters);
+    },
+    updateTrade: async (id: string, patch: UpdateTradeInput) => {
+      return tradingDbApiOrThrow().updateTrade(id, patch);
+    },
+    deleteTrade: async (id: string) => {
+      return tradingDbApiOrThrow().deleteTrade(id);
+    },
+    createPortfolioSnapshot: async (snapshot: CreatePortfolioSnapshotInput) => {
+      return tradingDbApiOrThrow().createPortfolioSnapshot(snapshot);
+    },
+    listPortfolioSnapshots: async (filters?: PortfolioSnapshotFilters) => {
+      return tradingDbApiOrThrow().listPortfolioSnapshots(filters);
+    },
+    deletePortfolioSnapshot: async (id: string) => {
+      return tradingDbApiOrThrow().deletePortfolioSnapshot(id);
+    },
+  } satisfies TradingDbApi,
 } as const;

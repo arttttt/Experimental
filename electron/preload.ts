@@ -31,3 +31,61 @@ contextBridge.exposeInMainWorld('walletCrypto', {
     return ipcRenderer.invoke('ipc:crypto:decrypt', encryptedBase64, password)
   },
 })
+
+contextBridge.exposeInMainWorld('tradingDb', {
+  createTrade: (
+    trade: Readonly<{
+      id?: string
+      pair: string
+      side: 'buy' | 'sell'
+      quantity: number
+      price: number
+      fee?: number
+      timestamp: number
+      status?: 'pending' | 'filled' | 'cancelled' | 'failed'
+    }>,
+  ) => {
+    return ipcRenderer.invoke('ipc:db:trades:create', trade)
+  },
+  listTrades: (
+    filters?: Readonly<{
+      pair?: string
+      status?: 'pending' | 'filled' | 'cancelled' | 'failed'
+      fromTimestamp?: number
+      toTimestamp?: number
+      limit?: number
+      offset?: number
+    }>,
+  ) => {
+    return ipcRenderer.invoke('ipc:db:trades:list', filters)
+  },
+  updateTrade: (id: string, patch: Record<string, unknown>) => {
+    return ipcRenderer.invoke('ipc:db:trades:update', id, patch)
+  },
+  deleteTrade: (id: string) => {
+    return ipcRenderer.invoke('ipc:db:trades:delete', id)
+  },
+  createPortfolioSnapshot: (
+    snapshot: Readonly<{
+      id?: string
+      capturedAt: number
+      totalValue: number
+      holdings: unknown
+    }>,
+  ) => {
+    return ipcRenderer.invoke('ipc:db:portfolio-snapshots:create', snapshot)
+  },
+  listPortfolioSnapshots: (
+    filters?: Readonly<{
+      fromTimestamp?: number
+      toTimestamp?: number
+      limit?: number
+      offset?: number
+    }>,
+  ) => {
+    return ipcRenderer.invoke('ipc:db:portfolio-snapshots:list', filters)
+  },
+  deletePortfolioSnapshot: (id: string) => {
+    return ipcRenderer.invoke('ipc:db:portfolio-snapshots:delete', id)
+  },
+})
