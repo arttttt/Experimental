@@ -47,6 +47,10 @@ function formatUsd(value: number): string {
   }).format(value);
 }
 
+function formatPercent(value: number): string {
+  return `${value.toFixed(2)}%`;
+}
+
 async function fetchUsdPrices(tokens: readonly TokenConfig[]): Promise<Map<string, number>> {
   const ids = tokens.map((token) => token.mint.value).join(',');
   const controller = new AbortController();
@@ -214,6 +218,9 @@ export function TokenBalancesPanel({
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Portfolio</p>
           <h2 className="text-lg font-semibold text-slate-50">Token balances</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            Total value: <span className="font-semibold text-slate-50">{formatUsd(totalUsd)}</span>
+          </p>
         </div>
 
         <button
@@ -247,6 +254,7 @@ export function TokenBalancesPanel({
               <th className="px-3 py-2 text-right font-medium">Balance</th>
               <th className="px-3 py-2 text-right font-medium">Price</th>
               <th className="px-3 py-2 text-right font-medium">Value</th>
+              <th className="px-3 py-2 text-right font-medium">Allocation</th>
             </tr>
           </thead>
           <tbody>
@@ -266,6 +274,18 @@ export function TokenBalancesPanel({
                 >
                   {formatUsd(row.valueUsd)}
                 </td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center justify-end gap-3">
+                    <progress
+                      max={100}
+                      value={Math.min(row.allocationPercent, 100)}
+                      className="h-2 w-24 overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-slate-800 [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400 md:w-32"
+                    />
+                    <span className="w-14 text-right text-xs font-medium tabular-nums text-slate-200">
+                      {formatPercent(row.allocationPercent)}
+                    </span>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -277,10 +297,6 @@ export function TokenBalancesPanel({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800 pt-3">
-        <p className="text-sm text-slate-300">
-          Total value: <span className="font-semibold text-slate-50">{formatUsd(totalUsd)}</span>
-        </p>
-
         <p className="text-xs text-slate-400">
           {lastUpdatedAt ? `Last updated ${new Date(lastUpdatedAt).toLocaleTimeString()}` : 'Not updated yet'}
         </p>

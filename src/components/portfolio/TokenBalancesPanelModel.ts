@@ -8,6 +8,7 @@ export interface BalanceRow {
   balance: number;
   unitPriceUsd: number;
   valueUsd: number;
+  allocationPercent: number;
 }
 
 export class TokenBalancesPanelModel {
@@ -30,7 +31,7 @@ export class TokenBalancesPanelModel {
     balances: BalanceMap,
     prices: ReadonlyMap<string, number>,
   ): BalanceRow[] {
-    return tokens
+    const rowsWithoutAllocation = tokens
       .map((token) => {
         const balance = balances.get(token.mint.value)?.balance ?? 0;
         const unitPriceUsd =
@@ -43,9 +44,18 @@ export class TokenBalancesPanelModel {
           balance,
           unitPriceUsd,
           valueUsd: balance * unitPriceUsd,
+          allocationPercent: 0,
         };
       })
+      .filter((row) => row.balance > 0)
       .sort((left, right) => right.valueUsd - left.valueUsd);
+
+    const totalUsd = rowsWithoutAllocation.reduce((sum, row) => sum + row.valueUsd, 0);
+
+    return rowsWithoutAllocation.map((row) => ({
+      ...row,
+      allocationPercent: totalUsd > 0 ? (row.valueUsd / totalUsd) * 100 : 0,
+    }));
   }
 
   public static formatWalletAddress(address: string): string {
