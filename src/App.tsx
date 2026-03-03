@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import Sidebar, { type ViewName } from './Sidebar';
 import { CandlestickChart } from '@/components/chart/CandlestickChart';
 import { LimitOrdersPanel } from '@/components/orders/LimitOrdersPanel';
+import { TradeHistoryPanel } from '@/components/orders/TradeHistoryPanel';
 import { TokenBalancesPanel } from '@/components/portfolio/TokenBalancesPanel';
 import { SwapFormPanel } from '@/components/swap/SwapFormPanel';
 import { MarketTokenRegistry } from '@/domain/constants/MarketTokenRegistry';
@@ -11,6 +12,7 @@ const VIEW_TITLES: Record<ViewName, string> = {
   Swap: 'Market Swap',
   Portfolio: 'Portfolio Overview',
   'Limit Orders': 'Limit Orders',
+  'Trade History': 'Trade History',
   Settings: 'Workspace Settings',
 };
 
@@ -64,6 +66,8 @@ function App() {
               <TokenBalancesPanel walletAddress={DEMO_WALLET_ADDRESS} />
             ) : activeView === 'Limit Orders' ? (
               <LimitOrdersPanel walletAddress={DEMO_WALLET_ADDRESS} tokens={availableTokens} />
+            ) : activeView === 'Trade History' ? (
+              <TradeHistoryPanel />
             ) : (
               <>
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Main content</p>

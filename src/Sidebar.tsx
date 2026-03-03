@@ -1,6 +1,6 @@
 import WalletConnectPanel from '@/components/wallet/WalletConnectPanel';
 
-const VIEWS = ['Chart', 'Swap', 'Portfolio', 'Limit Orders', 'Settings'] as const;
+const VIEWS = ['Chart', 'Swap', 'Portfolio', 'Limit Orders', 'Trade History', 'Settings'] as const;
 
 export type ViewName = (typeof VIEWS)[number];
 
