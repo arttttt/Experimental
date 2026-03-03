@@ -37,7 +37,7 @@ function App() {
         <Sidebar activeView={activeView} onSelectView={setActiveView} />
 
         <section className="flex-1 p-5 md:p-8">
-          <header className="rounded-xl border border-slate-800 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40 md:p-6">
+          <header className="rounded-2xl border border-slate-800/90 bg-slate-900/70 p-5 shadow-xl shadow-slate-950/40 md:p-6">
             <p className="text-xs uppercase tracking-[0.18em] text-cyan-400">Solana Trading Terminal</p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50 md:text-3xl">{VIEW_TITLES[activeView]}</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
@@ -46,7 +46,7 @@ function App() {
             </p>
           </header>
 
-          <article className="mt-5 rounded-xl border border-slate-800 bg-slate-900/50 p-5 shadow-lg shadow-slate-950/30 md:mt-6 md:p-7">
+          <article className="mt-5 rounded-2xl border border-slate-800/90 bg-slate-900/50 p-5 shadow-lg shadow-slate-950/30 md:mt-6 md:p-7">
             {activeView === 'Chart' ? (
               <CandlestickChart
                 poolAddress={selectedToken.poolAddress}

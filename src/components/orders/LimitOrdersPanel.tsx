@@ -5,6 +5,7 @@ import {
   type TriggerOrderRecord,
 } from '@/data/sources/api/JupiterTriggerClient';
 import type { MarketTokenDefinition } from '@/domain/constants/MarketTokenRegistry';
+import { PanelSkeleton, PanelStateMessage } from '@/components/ui/PanelState';
 
 interface LimitOrdersPanelProps {
   walletAddress: string;
@@ -249,7 +250,7 @@ export function LimitOrdersPanel({ walletAddress, tokens }: LimitOrdersPanelProp
   }, [loadOrders]);
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
+    <section className="rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Limit orders</p>
@@ -380,7 +381,11 @@ export function LimitOrdersPanel({ walletAddress, tokens }: LimitOrdersPanelProp
           </div>
 
           <div className="max-h-72 overflow-auto">
-            {activeOrders.length === 0 ? (
+            {isLoadingOrders ? (
+              <div className="px-3 py-3">
+                <PanelSkeleton rows={3} />
+              </div>
+            ) : activeOrders.length === 0 ? (
               <p className="px-3 py-4 text-sm text-slate-400">No active orders.</p>
             ) : (
               <table className="min-w-full text-left text-xs">
@@ -431,7 +436,11 @@ export function LimitOrdersPanel({ walletAddress, tokens }: LimitOrdersPanelProp
           </div>
 
           <div className="max-h-72 overflow-auto">
-            {historyOrders.length === 0 ? (
+            {isLoadingOrders ? (
+              <div className="px-3 py-3">
+                <PanelSkeleton rows={3} />
+              </div>
+            ) : historyOrders.length === 0 ? (
               <p className="px-3 py-4 text-sm text-slate-400">No historical orders yet.</p>
             ) : (
               <table className="min-w-full text-left text-xs">
@@ -468,9 +477,17 @@ export function LimitOrdersPanel({ walletAddress, tokens }: LimitOrdersPanelProp
       ) : null}
 
       {error ? (
-        <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {error}
-        </p>
+        <div className="mt-3">
+          <PanelStateMessage
+            title="Orders request failed"
+            description={error}
+            tone="danger"
+            actionLabel="Retry"
+            onAction={() => {
+              void loadOrders();
+            }}
+          />
+        </div>
       ) : null}
     </section>
   );

@@ -5,6 +5,7 @@ import { WalletAddress } from '@/domain/models/id';
 import { PortfolioPnlPolicy, type PnlPeriod } from '@/domain/policies/PortfolioPnlPolicy';
 import { TOKENS, type TokenConfig } from '@/infrastructure/shared/config';
 import { TokenBalancesPanelModel, type BalanceRow } from '@/components/portfolio/TokenBalancesPanelModel';
+import { PanelSkeleton, PanelStateMessage } from '@/components/ui/PanelState';
 import { ipc } from '@/lib/ipc';
 
 interface TokenBalancesPanelProps {
@@ -268,7 +269,7 @@ export function TokenBalancesPanel({
   const selectedPnl = pnlByPeriod[selectedPnlPeriod];
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
+    <section className="rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Portfolio</p>
@@ -447,10 +448,24 @@ export function TokenBalancesPanel({
         </p>
       </div>
 
-      {isLoading ? <p className="mt-3 text-sm text-cyan-300">Loading balances...</p> : null}
+      {isLoading ? (
+        <div className="mt-3">
+          <PanelSkeleton rows={2} />
+        </div>
+      ) : null}
 
       {error ? (
-        <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+        <div className="mt-3">
+          <PanelStateMessage
+            title="Failed to load portfolio"
+            description={error}
+            tone="danger"
+            actionLabel="Retry"
+            onAction={() => {
+              void loadBalances('refresh');
+            }}
+          />
+        </div>
       ) : null}
     </section>
   );

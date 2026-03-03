@@ -29,6 +29,7 @@ import {
   IndicatorOverlay,
   type OverlayRenderConfig,
 } from '@/components/chart/IndicatorOverlay';
+import { PanelStateMessage } from '@/components/ui/PanelState';
 import { computeMacd } from '@/features/indicators/macd';
 import { computeRsi } from '@/features/indicators/rsi';
 import { OhlcvMarketDataService } from '@/features/market-data/OhlcvMarketDataService';
@@ -278,11 +279,16 @@ export function CandlestickChart(props: CandlestickChartProps) {
   const [rsiPanelHeight, setRsiPanelHeight] = useState<number>(160);
   const [selectedTimeframe, setSelectedTimeframe] = useState<CandleInterval>('15m');
   const [timeframe, setTimeframe] = useState<CandleInterval>(selectedTimeframe);
+  const [reloadNonce, setReloadNonce] = useState<number>(0);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [indicatorCandles, setIndicatorCandles] = useState<Candle[]>([]);
   const [indicatorSettings, setIndicatorSettings] = useState<IndicatorSettingsState>(() => loadIndicatorSettings());
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const hasNoCandles = !isLoading && !error && indicatorCandles.length === 0;
+  const handleReloadData = () => {
+    setReloadNonce((previous) => previous + 1);
+  };
   const mainPanelHeight = CHART_STACK_HEIGHT_PX - rsiPanelHeight - PANEL_HANDLE_HEIGHT_PX;
   const activeOverlayConfigs = useMemo<OverlayRenderConfig[]>(() => {
     const overlays: OverlayRenderConfig[] = [];
@@ -1031,6 +1037,7 @@ export function CandlestickChart(props: CandlestickChartProps) {
     props.poolAddress,
     props.tokenMint,
     timeframe,
+    reloadNonce,
   ]);
 
   const handleStartResize = () => {
@@ -1055,13 +1062,13 @@ export function CandlestickChart(props: CandlestickChartProps) {
   };
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40">
+    <section className="rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Market</p>
           <h2 className="text-lg font-semibold text-slate-50">Candlestick Chart</h2>
         </div>
-        {isLoading ? <span className="text-xs text-cyan-300">Loading...</span> : null}
+        {isLoading ? <span className="text-xs text-cyan-300">Loading market data...</span> : null}
       </div>
 
       <ChartToolbar
@@ -1115,7 +1122,26 @@ export function CandlestickChart(props: CandlestickChartProps) {
       </div>
 
       {error ? (
-        <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+        <div className="mt-3">
+          <PanelStateMessage
+            title="Unable to load candles"
+            description={error}
+            tone="danger"
+            actionLabel="Retry"
+            onAction={handleReloadData}
+          />
+        </div>
+      ) : null}
+
+      {hasNoCandles ? (
+        <div className="mt-3">
+          <PanelStateMessage
+            title="No candle data"
+            description="No candles were returned for the selected token and timeframe. Try another market or timeframe."
+            actionLabel="Reload"
+            onAction={handleReloadData}
+          />
+        </div>
       ) : null}
     </section>
   );

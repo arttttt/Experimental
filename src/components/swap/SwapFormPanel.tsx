@@ -9,6 +9,7 @@ import { TransactionClient } from '@/data/sources/api/TransactionClient';
 import { WalletAddress } from '@/domain/models/id';
 import { SlippagePolicy } from '@/domain/policies';
 import { TOKENS, type TokenConfig } from '@/infrastructure/shared/config';
+import { PanelStateMessage } from '@/components/ui/PanelState';
 
 type SwapFormPanelProps = Readonly<{
   defaultWalletAddress: string;
@@ -376,7 +377,7 @@ export function SwapFormPanel({ defaultWalletAddress }: SwapFormPanelProps) {
     : [];
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
+    <section className="rounded-2xl border border-slate-800/90 bg-slate-900/70 p-4 shadow-2xl shadow-slate-950/40 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Swap</p>
@@ -506,6 +507,15 @@ export function SwapFormPanel({ defaultWalletAddress }: SwapFormPanelProps) {
         <p className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
           {quoteError}
         </p>
+      ) : null}
+
+      {!quoteState && !quoteError && !isQuoting && validationState.requestError === null ? (
+        <div className="mt-3">
+          <PanelStateMessage
+            title="No quote yet"
+            description="Set token pair, amount, and slippage, then request a quote to see route and execution details."
+          />
+        </div>
       ) : null}
 
       {quoteState ? (

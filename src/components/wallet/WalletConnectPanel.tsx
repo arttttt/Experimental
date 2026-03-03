@@ -127,7 +127,7 @@ function WalletConnectPanel() {
   };
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/65 p-4" aria-label="Wallet connect panel">
+    <section className="rounded-2xl border border-slate-800/90 bg-slate-900/65 p-4" aria-label="Wallet connect panel">
       <p className="text-[0.68rem] uppercase tracking-[0.18em] text-cyan-300/90">Wallet</p>
       <p className="mt-1 text-[0.72rem] text-slate-400">
         {walletSession === null
