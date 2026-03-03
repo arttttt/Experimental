@@ -3,6 +3,21 @@ export type WalletCryptoApi = Readonly<{
   decrypt: (encryptedBase64: string, password: string) => Promise<string>;
 }>;
 
+export type SaveTextFileResult =
+  | Readonly<{
+      saved: true;
+      canceled: false;
+      filePath: string;
+    }>
+  | Readonly<{
+      saved: false;
+      canceled: true;
+    }>;
+
+export type FileDialogApi = Readonly<{
+  saveTextFile: (options: Readonly<{ defaultFileName: string; content: string }>) => Promise<SaveTextFileResult>;
+}>;
+
 export type TradeSide = 'buy' | 'sell';
 export type TradeStatus = 'pending' | 'filled' | 'cancelled' | 'failed';
 
@@ -83,6 +98,8 @@ export type TradingDbApi = Readonly<{
 
 const WALLET_CRYPTO_UNAVAILABLE_ERROR =
   'Wallet crypto API is unavailable. Use the Electron app shell to access secure key operations.';
+const FILE_DIALOG_UNAVAILABLE_ERROR =
+  'File dialog API is unavailable. Use the Electron app shell to access save dialogs.';
 const TRADING_DB_UNAVAILABLE_ERROR =
   'Trading DB API is unavailable. Use the Electron app shell to access SQLite-backed storage.';
 
@@ -97,6 +114,16 @@ const walletCryptoApiOrThrow = (): WalletCryptoApi => {
   }
 
   throw new Error(WALLET_CRYPTO_UNAVAILABLE_ERROR);
+};
+
+const fileDialogApiOrThrow = (): FileDialogApi => {
+  const fileDialog = window.fileDialog;
+
+  if (typeof fileDialog?.saveTextFile === 'function') {
+    return fileDialog;
+  }
+
+  throw new Error(FILE_DIALOG_UNAVAILABLE_ERROR);
 };
 
 const tradingDbApiOrThrow = (): TradingDbApi => {
@@ -126,6 +153,11 @@ export const ipc = {
       return walletCryptoApiOrThrow().decrypt(encryptedBase64, password);
     },
   } satisfies WalletCryptoApi,
+  fileDialog: {
+    saveTextFile: async (options: Readonly<{ defaultFileName: string; content: string }>) => {
+      return fileDialogApiOrThrow().saveTextFile(options);
+    },
+  } satisfies FileDialogApi,
   db: {
     createTrade: async (trade: CreateTradeInput) => {
       return tradingDbApiOrThrow().createTrade(trade);

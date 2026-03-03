@@ -28,6 +28,22 @@ interface Window {
     encrypt: (plaintext: string, password: string) => Promise<string>
     decrypt: (encryptedBase64: string, password: string) => Promise<string>
   }
+  fileDialog: {
+    saveTextFile: (options: {
+      defaultFileName: string
+      content: string
+    }) => Promise<
+      | {
+          saved: true
+          canceled: false
+          filePath: string
+        }
+      | {
+          saved: false
+          canceled: true
+        }
+    >
+  }
   tradingDb: {
     createTrade: (trade: {
       id?: string

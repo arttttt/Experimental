@@ -6,7 +6,8 @@ import { PortfolioPnlPolicy, type PnlPeriod } from '@/domain/policies/PortfolioP
 import { TOKENS, type TokenConfig } from '@/infrastructure/shared/config';
 import { TokenBalancesPanelModel, type BalanceRow } from '@/components/portfolio/TokenBalancesPanelModel';
 import { PanelSkeleton, PanelStateMessage } from '@/components/ui/PanelState';
-import { ipc } from '@/lib/ipc';
+import { toTradeCsv } from '@/components/portfolio/tradeCsv';
+import { ipc, type TradeRecord } from '@/lib/ipc';
 
 interface TokenBalancesPanelProps {
   walletAddress: string;
@@ -22,11 +23,19 @@ interface PriceResponseBody {
   data?: Record<string, PriceResponseEntry>;
 }
 
+interface TradeHistoryFilters {
+  pair: string;
+  side: TradeSideFilter;
+  fromDate: string;
+  toDate: string;
+}
+
 function isPriceRecord(value: unknown): value is Record<string, PriceResponseEntry> {
   return typeof value === 'object' && value !== null;
 }
 
 type LoadMode = 'initial' | 'refresh';
+type TradeSideFilter = 'all' | 'buy' | 'sell';
 
 const PNL_PERIOD_OPTIONS: ReadonlyArray<{ value: PnlPeriod; label: string }> = [
   { value: '24h', label: '24h' },
@@ -37,6 +46,7 @@ const PNL_PERIOD_OPTIONS: ReadonlyArray<{ value: PnlPeriod; label: string }> = [
 
 const DEFAULT_REFRESH_INTERVAL_MS = 30_000;
 const PRICE_REQUEST_TIMEOUT_MS = 4_000;
+const TRADE_HISTORY_LIMIT = 5_000;
 const balanceClient = new BalanceClient();
 
 function formatTokenAmount(value: number): string {
@@ -83,6 +93,62 @@ function pnlTextColor(value: number): string {
   }
 
   return 'text-slate-300';
+}
+
+function formatTradeTimestamp(timestamp: number): string {
+  const value = Number(timestamp);
+  if (!Number.isFinite(value)) {
+    return '-';
+  }
+
+  const asDate = new Date(value);
+  if (Number.isNaN(asDate.getTime())) {
+    return '-';
+  }
+
+  return asDate.toLocaleString();
+}
+
+function formatTradePair(pair: string): string {
+  return pair && pair.trim().length > 0 ? pair : '-';
+}
+
+function formatTradeSide(side: 'buy' | 'sell'): string {
+  return side === 'buy' ? 'Buy' : 'Sell';
+}
+
+function toDayStartTimestamp(dateText: string): number | undefined {
+  if (!dateText) {
+    return undefined;
+  }
+
+  const asDate = new Date(`${dateText}T00:00:00`);
+  const timestamp = asDate.getTime();
+  return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+function toDayEndTimestamp(dateText: string): number | undefined {
+  if (!dateText) {
+    return undefined;
+  }
+
+  const asDate = new Date(`${dateText}T23:59:59.999`);
+  const timestamp = asDate.getTime();
+  return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+function toTradeQueryFilters(filters: TradeHistoryFilters): {
+  pair?: string;
+  fromTimestamp?: number;
+  toTimestamp?: number;
+} {
+  const pair = filters.pair.trim();
+
+  return {
+    pair: pair.length > 0 ? pair : undefined,
+    fromTimestamp: toDayStartTimestamp(filters.fromDate),
+    toTimestamp: toDayEndTimestamp(filters.toDate),
+  };
 }
 
 async function fetchUsdPrices(tokens: readonly TokenConfig[]): Promise<Map<string, number>> {
@@ -142,7 +208,19 @@ export function TokenBalancesPanel({
       positions: [],
     }).byPeriod,
   );
+  const [tradeRows, setTradeRows] = useState<readonly TradeRecord[]>([]);
+  const [tradeFilters, setTradeFilters] = useState<TradeHistoryFilters>({
+    pair: '',
+    side: 'all',
+    fromDate: '',
+    toDate: '',
+  });
+  const [isLoadingTrades, setIsLoadingTrades] = useState<boolean>(false);
+  const [isExportingCsv, setIsExportingCsv] = useState<boolean>(false);
+  const [tradeNotice, setTradeNotice] = useState<string | null>(null);
+  const [tradeError, setTradeError] = useState<string | null>(null);
   const requestCounterRef = useRef<number>(0);
+  const tradeRequestCounterRef = useRef<number>(0);
   const inFlightRef = useRef<boolean>(false);
   const isMountedRef = useRef<boolean>(true);
 
@@ -180,7 +258,7 @@ export function TokenBalancesPanel({
     try {
       setError(null);
       const balancesPromise = balanceClient.getAllBalances(wallet, [...TOKENS]);
-      const tradesPromise = ipc.db.listTrades({ status: 'filled', limit: 5_000 });
+      const tradesPromise = ipc.db.listTrades({ status: 'filled', limit: TRADE_HISTORY_LIMIT });
 
       let prices = new Map<string, number>();
 
@@ -234,18 +312,115 @@ export function TokenBalancesPanel({
     }
   }, [wallet]);
 
+  const loadTradeHistory = useCallback(async () => {
+    const fromTimestamp = toDayStartTimestamp(tradeFilters.fromDate);
+    const toTimestamp = toDayEndTimestamp(tradeFilters.toDate);
+
+    if (
+      fromTimestamp !== undefined &&
+      toTimestamp !== undefined &&
+      Number.isFinite(fromTimestamp) &&
+      Number.isFinite(toTimestamp) &&
+      fromTimestamp > toTimestamp
+    ) {
+      setTradeRows([]);
+      setTradeError('From date must be earlier than or equal to To date.');
+      setIsLoadingTrades(false);
+      return;
+    }
+
+    if (!wallet) {
+      setTradeRows([]);
+      setTradeError(null);
+      setIsLoadingTrades(false);
+      return;
+    }
+
+    tradeRequestCounterRef.current += 1;
+    const requestId = tradeRequestCounterRef.current;
+    setIsLoadingTrades(true);
+    setTradeError(null);
+
+    try {
+      const trades = await ipc.db.listTrades({
+        status: 'filled',
+        ...toTradeQueryFilters(tradeFilters),
+        limit: TRADE_HISTORY_LIMIT,
+      });
+
+      if (!isMountedRef.current || requestId !== tradeRequestCounterRef.current) {
+        return;
+      }
+
+      setTradeRows(trades);
+    } catch (cause) {
+      if (!isMountedRef.current || requestId !== tradeRequestCounterRef.current) {
+        return;
+      }
+
+      setTradeRows([]);
+      setTradeError(cause instanceof Error ? cause.message : 'Failed to load trade history.');
+    } finally {
+      if (requestId === tradeRequestCounterRef.current) {
+        setIsLoadingTrades(false);
+      }
+    }
+  }, [tradeFilters, wallet]);
+
+  const visibleTrades = useMemo(() => {
+    if (tradeFilters.side === 'all') {
+      return tradeRows;
+    }
+
+    return tradeRows.filter((trade) => trade.side === tradeFilters.side);
+  }, [tradeFilters.side, tradeRows]);
+
+  const handleExportCsv = useCallback(async () => {
+    if (visibleTrades.length === 0 || isExportingCsv) {
+      return;
+    }
+
+    setIsExportingCsv(true);
+    setTradeNotice(null);
+
+    try {
+      const now = new Date();
+      const isoDate = now.toISOString().slice(0, 10);
+      const saveResult = await ipc.fileDialog.saveTextFile({
+        defaultFileName: `trades_${isoDate}.csv`,
+        content: toTradeCsv(visibleTrades),
+      });
+
+      if (saveResult.saved) {
+        setTradeNotice(`CSV exported: ${saveResult.filePath}`);
+        return;
+      }
+
+      setTradeNotice('CSV export canceled.');
+    } catch (cause) {
+      setTradeNotice(cause instanceof Error ? cause.message : 'Failed to export CSV.');
+    } finally {
+      setIsExportingCsv(false);
+    }
+  }, [isExportingCsv, visibleTrades]);
+
   useEffect(() => {
     isMountedRef.current = true;
 
     return () => {
       isMountedRef.current = false;
       requestCounterRef.current += 1;
+      tradeRequestCounterRef.current += 1;
     };
   }, []);
 
   useEffect(() => {
     void loadBalances('initial');
   }, [loadBalances]);
+
+  useEffect(() => {
+    void loadTradeHistory();
+  }, [loadTradeHistory]);
 
   useEffect(() => {
     if (!wallet) {
@@ -390,6 +565,144 @@ export function TokenBalancesPanel({
             <div className="border-t border-slate-800 px-3 py-4 text-sm text-slate-400">No trade history yet.</div>
           ) : null}
         </div>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-slate-800/90 bg-slate-950/50 p-3 md:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Trade History</p>
+            <h3 className="text-sm font-semibold text-slate-50">Recent filled trades ({visibleTrades.length})</h3>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              void handleExportCsv();
+            }}
+            disabled={visibleTrades.length === 0 || isExportingCsv || isLoadingTrades}
+            className="rounded-md border border-cyan-500/60 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isExportingCsv ? 'Exporting...' : 'Export CSV'}
+          </button>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <label className="text-xs text-slate-300">
+            <span className="mb-1 block text-slate-400">Pair</span>
+            <input
+              type="text"
+              value={tradeFilters.pair}
+              onChange={(event) => {
+                setTradeFilters((current) => ({
+                  ...current,
+                  pair: event.target.value.toUpperCase(),
+                }));
+              }}
+              placeholder="SOL/USDC"
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-2 text-sm text-slate-100"
+            />
+          </label>
+
+          <label className="text-xs text-slate-300">
+            <span className="mb-1 block text-slate-400">Side</span>
+            <select
+              value={tradeFilters.side}
+              onChange={(event) => {
+                setTradeFilters((current) => ({
+                  ...current,
+                  side: event.target.value as TradeSideFilter,
+                }));
+              }}
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-2 text-sm text-slate-100"
+            >
+              <option value="all">All</option>
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
+          </label>
+
+          <label className="text-xs text-slate-300">
+            <span className="mb-1 block text-slate-400">From</span>
+            <input
+              type="date"
+              value={tradeFilters.fromDate}
+              onChange={(event) => {
+                setTradeFilters((current) => ({
+                  ...current,
+                  fromDate: event.target.value,
+                }));
+              }}
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-2 text-sm text-slate-100"
+            />
+          </label>
+
+          <label className="text-xs text-slate-300">
+            <span className="mb-1 block text-slate-400">To</span>
+            <input
+              type="date"
+              value={tradeFilters.toDate}
+              onChange={(event) => {
+                setTradeFilters((current) => ({
+                  ...current,
+                  toDate: event.target.value,
+                }));
+              }}
+              className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-2 text-sm text-slate-100"
+            />
+          </label>
+        </div>
+
+        <div className="mt-3 overflow-x-auto rounded-lg border border-slate-800/90">
+          <table className="min-w-full text-left text-xs">
+            <thead className="bg-slate-900/90 text-slate-400">
+              <tr>
+                <th className="px-3 py-2 font-medium">Date</th>
+                <th className="px-3 py-2 font-medium">Pair</th>
+                <th className="px-3 py-2 font-medium">Side</th>
+                <th className="px-3 py-2 text-right font-medium">Quantity</th>
+                <th className="px-3 py-2 text-right font-medium">Price</th>
+                <th className="px-3 py-2 text-right font-medium">Commission</th>
+                <th className="px-3 py-2 text-right font-medium">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleTrades.map((trade) => {
+                const amount = trade.quantity * trade.price;
+
+                return (
+                  <tr key={trade.id} className="border-t border-slate-800 text-slate-200">
+                    <td className="px-3 py-2 text-slate-300">{formatTradeTimestamp(trade.timestamp)}</td>
+                    <td className="px-3 py-2">{formatTradePair(trade.pair)}</td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={[
+                          'rounded border px-2 py-0.5 text-[11px] uppercase tracking-[0.08em]',
+                          trade.side === 'buy'
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                            : 'border-rose-500/40 bg-rose-500/10 text-rose-200',
+                        ].join(' ')}
+                      >
+                        {formatTradeSide(trade.side)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatTokenAmount(trade.quantity)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatUsd(trade.price)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatUsd(trade.fee)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatUsd(amount)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {!isLoadingTrades && visibleTrades.length === 0 ? (
+            <div className="border-t border-slate-800 px-3 py-4 text-sm text-slate-400">No trades for active filters.</div>
+          ) : null}
+        </div>
+
+        {isLoadingTrades ? <p className="mt-3 text-xs text-cyan-300">Loading trade history...</p> : null}
+        {tradeError ? <p className="mt-3 text-xs text-red-300">{tradeError}</p> : null}
+        {tradeNotice ? <p className="mt-3 text-xs text-slate-300">{tradeNotice}</p> : null}
       </div>
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-800/90">

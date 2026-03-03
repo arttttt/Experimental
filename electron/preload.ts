@@ -89,3 +89,14 @@ contextBridge.exposeInMainWorld('tradingDb', {
     return ipcRenderer.invoke('ipc:db:portfolio-snapshots:delete', id)
   },
 })
+
+contextBridge.exposeInMainWorld('fileDialog', {
+  saveTextFile: (
+    options: Readonly<{
+      defaultFileName: string
+      content: string
+    }>,
+  ) => {
+    return ipcRenderer.invoke('ipc:file:save-text', options)
+  },
+})

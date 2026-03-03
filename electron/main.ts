@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { writeFile } from 'node:fs/promises'
 import { KeyEncryptionService } from '../src/infrastructure/internal/crypto'
 import { TradingDatabase, type PortfolioSnapshotFilters, type TradeFilters } from './database/TradingDatabase'
 
@@ -154,6 +155,33 @@ app.whenReady().then(() => {
   ipcMain.handle('ipc:db:portfolio-snapshots:delete', async (_event, id: string) => {
     return getTradingDatabase().deletePortfolioSnapshot(id)
   })
+
+  ipcMain.handle(
+    'ipc:file:save-text',
+    async (
+      _event,
+      options: Readonly<{
+        defaultFileName: string
+        content: string
+      }>,
+    ) => {
+      const browserWindow = BrowserWindow.getFocusedWindow() ?? win
+      const saveOptions = {
+        defaultPath: options.defaultFileName,
+        filters: [{ name: 'CSV files', extensions: ['csv'] }],
+      }
+      const saveResult = browserWindow
+        ? await dialog.showSaveDialog(browserWindow, saveOptions)
+        : await dialog.showSaveDialog(saveOptions)
+
+      if (saveResult.canceled || !saveResult.filePath) {
+        return { saved: false as const, canceled: true as const }
+      }
+
+      await writeFile(saveResult.filePath, options.content, 'utf8')
+      return { saved: true as const, canceled: false as const, filePath: saveResult.filePath }
+    },
+  )
 
   createWindow()
 })
